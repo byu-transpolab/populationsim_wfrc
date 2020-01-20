@@ -1,0 +1,14 @@
+---
+title: "Dataset Builder"
+author: "Greg Macfarlane"
+date: "1/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE, cache = FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+This document provides a place for data manipulation and notes necessary to
+construct the PopulationSim implementation in the WFRC model region.
+
