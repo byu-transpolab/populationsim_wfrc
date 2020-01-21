@@ -100,4 +100,30 @@ puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010
   write_csv("data/geo_cross_walk.csv"))
 ```
 
+## Controls
+
+Attributes we want to control for include:
+ - Number of households
+ - Household size
+ - Household income
+ - Age of persons
+ - Household workers
+ - Person worker status
+
+### TAZ-level controls
+
+The only TAZ-level control we get from WFRC is the number of households in each
+TAZ. Therefore, this will be the only control in this file.
+
+```{r taz_control}
+tcf <- str_c("inputs/", dir("inputs/"))
+taz_control <- lapply(tcf[grepl("SE_", tcf)], function(csv) {
+  read_csv(csv) %>% select(TAZID, TOTHH)
+}) %>%
+  bind_rows()
+
+write_csv(taz_control, "data/control_totals_taz.csv")
+```
+
+
 
