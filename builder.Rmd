@@ -132,6 +132,7 @@ write_csv(taz_control, "data/control_totals_taz.csv")
 ### Tract-Level Controls
 The attributes available from the ACS include the following:
   - Age, derived from Table `B01001: SEX BY AGE`
+  - Income, derived from Table `B19001:HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2018 INFLATION-ADJUSTED DOLLARS)` 
 
 First, we can collect a unique list of all the tracts we want to get controls for,
 alongside a complete list of all ACS variables
@@ -140,6 +141,7 @@ mytracts <- unique(crosswalk$tract)
 acsvars <- load_variables(2018, "acs5", cache = TRUE)
 ```
 
+#### Age
 First we get the number of people of each age category.
 
 ```{r age}
@@ -168,11 +170,40 @@ ages <- raw_ages %>%
   summarise(count = sum(estimate))
 ```
 
+#### Income
 
+```{r income}
+incvars <- str_c("B19001_", sprintf("%03d", c(2:17)))
+raw_incs <- get_acs("tract", variables = incvars, state = "UT", county = county_list)
+
+incs <- raw_incs %>%
+  left_join(acsvars, by = c("variable" = "name")) %>%
+  separate(label, c("VAR", "total", "income"), sep = "!!") %>%
+  select(GEOID, income, estimate)  %>%
+  # regroup income categories
+  mutate(
+    numinc  = stringr::str_extract(income, "\\d+"),
+    inccat = case_when(
+      numinc <  15 ~ "HHINC1",
+      numinc <  30 ~ "HHINC2",
+      numinc <  60 ~ "HHINC3",
+      numinc >= 60 ~ "HHINC4",
+      TRUE ~ as.character(NA)
+    )
+  ) %>%
+  group_by(GEOID, inccat) %>%
+  summarise(count = sum(estimate))
+```
+
+
+#### Tract Controls File
 Now, we write out the tract controls file.
 ```{r tract_controls}
 (tract_controls <- tibble(TRACT = mytracts) %>%
-  left_join(ages %>% spread(agecat, count), by = c("TRACT" = "GEOID")))
+   left_join(ages %>% spread(agecat, count), by = c("TRACT" = "GEOID")) %>%
+   left_join(incs %>% spread(inccat, count), by = c("TRACT" = "GEOID"))
+ 
+)
 
 write_csv(tract_controls, "data/control_totals_tract.csv")
 ```
