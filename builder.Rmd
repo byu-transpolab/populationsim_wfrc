@@ -11,6 +11,7 @@ library(sf)
 library(leaflet)
 library(tidyverse)
 library(tigris)
+library(tidycensus)
 ```
 
 This document provides a place for data manipulation and notes necessary to
@@ -41,11 +42,11 @@ this, we'll use the `tigris` library to get the tracts for the counties in
 question and then do a spatial join.
 
 ```{r crosswalk}
-crosswalk <- taz %>% 
+taz <- taz %>% 
   transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
             taz_area = st_area(.))
 
-county_list <- unique(crosswalk$CO_FIPS)
+county_list <- unique(taz$CO_FIPS)
 
 tr <- tracts(state = "49", county = county_list, class = "sf") %>%
   st_transform(4326) %>%
@@ -79,25 +80,25 @@ cw_tr %>%
   group_by(TAZID) %>%
   arrange(intersect_area, .by_group = TRUE)
 
-ggplot(cw_bg, aes(x = as.numeric(intersect_area) / as.numeric(taz_area))) + geom_histogram() + scale_x_log10()
+ggplot(cw_bg, aes(x = as.numeric(intersect_area))) + geom_histogram() + scale_x_log10()
 ```
 
 There may be opportunities to refine this process further, but we'll go with it
 for now. Let's append the tract / PUMA lookup from the Census bureau
 
 ```{r puma}
-
 puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt") %>%
   transmute(tract = str_c(STATEFP, COUNTYFP, TRACTCE), puma = PUMA5CE)
 
-(cw_bg  %>%
+(crosswalk <- cw_tr  %>%
   transmute(TAZID, tract = GEOID,
             county = substr(GEOID, 1, 5)) %>%
   left_join(puma_tract, by = c("tract")) %>%
   st_set_geometry(NULL)  %>%
   as_tibble() %>%
-  mutate(region = 1) %>%
-  write_csv("data/geo_cross_walk.csv"))
+  mutate(region = 1))
+
+write_csv(crosswalk, "data/geo_cross_walk.csv")
 ```
 
 ## Controls
@@ -128,12 +129,54 @@ write_csv(taz_control, "data/control_totals_taz.csv")
 ```
 
 
-### Block-Group Level Controls
+### Tract-Level Controls
+The attributes available from the ACS include the following:
+  - Age, derived from Table `B01001: SEX BY AGE`
 
-The attributes available from the Census at the block group level include:
-
-```{r bg_control}
-
+First, we can collect a unique list of all the tracts we want to get controls for,
+alongside a complete list of all ACS variables
+```{r tracts}
+mytracts <- unique(crosswalk$tract)
+acsvars <- load_variables(2018, "acs5", cache = TRUE)
 ```
+
+First we get the number of people of each age category.
+
+```{r age}
+agevars <- str_c("B01001_", sprintf("%03d", c(3:25, 27:49)))
+raw_ages <- get_acs("tract", variables = agevars, state = "UT", county = county_list)
+  
+ages <- raw_ages %>%
+  left_join(acsvars, by = c("variable" = "name")) %>%
+  separate(label, c("VAR", "total", "sex", "age"), sep = "!!") %>%
+  select(GEOID, sex, age, estimate)  %>%
+  
+  # regroup age categories
+  mutate(
+    numage = as.numeric(substr(age, 1, 2)),
+    agecat = case_when(
+      numage %in% c(15:24) ~ "HHAGE1",
+      numage %in% c(25:54) ~ "HHAGE2",
+      numage %in% c(55:64) ~ "HHAGE3",
+      numage %in% c(65:99) ~ "HHAGE4",
+      TRUE ~ "HHAGE0" # children less than 15 not categorized in demo
+    )
+  ) %>%
+  
+  # consolidate men and women
+  group_by(GEOID, agecat) %>%
+  summarise(count = sum(estimate))
+```
+
+
+Now, we write out the tract controls file.
+```{r tract_controls}
+(tract_controls <- tibble(TRACT = mytracts) %>%
+  left_join(ages %>% spread(agecat, count), by = c("TRACT" = "GEOID")))
+
+write_csv(tract_controls, "data/control_totals_tract.csv")
+```
+
+
 
 
