@@ -1,2 +1,4 @@
 output/*
 .Rproj.user
+data/psam_h49.csv
+data/psam_p49.csv

@@ -15,7 +15,7 @@ max_expansion_factor: 30
 
 # Geographic Settings
 # ------------------------------------------------------------------
-geographies: [REGION, PUMA, TRACT, TAZ]
+geographies: [PUMA, TRACT, TAZ]
 seed_geography: PUMA
 
 
@@ -23,9 +23,9 @@ seed_geography: PUMA
 # ------------------------------------------------------------------
 trace_geography:
   TAZ: 100
-  TRACT: 10200
+  TRACT: 49035112815
 
-  
+
 # Data Directory
 # ------------------------------------------------------------------
 data_dir: data
@@ -36,7 +36,7 @@ data_dir: data
 # input_pre_processor input_table_list
 input_table_list:
   - tablename: households
-    filename : seed_households.csv
+    filename : psam_h49.csv
     index_col: hh_id
     column_map:
       # not sure what SERIALNO is, but it is not unique
@@ -44,7 +44,7 @@ input_table_list:
       hhnum: hh_id
   - tablename: persons
     # expression_filename: seed_persons_expressions.csv
-    filename : seed_persons.csv
+    filename : psam_p49.csv
     column_map:
       # SERIALNO: hh_id
       hhnum: hh_id
@@ -67,9 +67,6 @@ input_table_list:
     filename : control_totals_taz.csv
   - tablename: TRACT_control_data
     filename : control_totals_tract.csv
-  - tablename: REGION_control_data
-    #filename : control_totals_meta.csv
-    filename : scaled_control_totals_meta.csv
 
 
 # Reserved Column Names

@@ -247,5 +247,9 @@ write_csv(tract_controls, "data/control_totals_tract.csv")
 ```
 
 
+### PUMS Seed Data
+
+The uncompressed seed data is too large to commit, so we have committed compressed
+versions of the original files. 
 
 
