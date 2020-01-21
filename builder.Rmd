@@ -131,6 +131,8 @@ write_csv(taz_control, "data/control_totals_taz.csv")
 
 ### Tract-Level Controls
 The attributes available from the ACS include the following:
+  - Household size, derived from Table `B08202: HOUSEHOLD SIZE BY NUMBER OF WORKERS IN HOUSEHOLD`
+  - Household workers, derived from the same table
   - Age, derived from Table `B01001: SEX BY AGE`
   - Income, derived from Table `B19001:HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2018 INFLATION-ADJUSTED DOLLARS)` 
 
@@ -140,6 +142,41 @@ alongside a complete list of all ACS variables
 mytracts <- unique(crosswalk$tract)
 acsvars <- load_variables(2018, "acs5", cache = TRUE)
 ```
+
+#### Household size and workers
+Because these two values come in the same table, we will build them together.
+
+```{r sizework}
+swvars <- str_c("B08202_", sprintf("%03d", c(2:5, 6, 9, 13, 18)))
+raw_sw <- get_acs("tract", variables = swvars, state = "UT", county = county_list)
+
+size_work <- raw_sw %>% 
+  left_join(acsvars, by = c("variable" = "name")) %>%
+  separate(label, c("VAR", "total", "label"), sep = "!!") %>%
+  select(GEOID, label, estimate) 
+
+works <- size_work %>%
+  filter(grepl("work", label)) %>%
+  mutate(
+    num_work = str_extract(label, "\\d+"),
+    workcat = case_when(
+      num_work == 1 ~ "HHWORK1",
+      num_work == 2 ~ "HHWORK2",
+      num_work == 3 ~ "HHWORK3",
+      TRUE ~ "HHWORK0"
+    )
+  ) %>% 
+  group_by(GEOID, workcat) %>% summarize(count = sum(estimate))
+
+sizes <- size_work %>%
+  filter(!grepl("work", label)) %>%
+  mutate(
+   num_size = str_extract(label, "\\d+"),
+   sizecat = str_c("HHSIZE", num_size) 
+  ) %>%
+  group_by(GEOID, sizecat) %>% summarize(count = sum(estimate))
+```
+
 
 #### Age
 First we get the number of people of each age category.
@@ -200,9 +237,10 @@ incs <- raw_incs %>%
 Now, we write out the tract controls file.
 ```{r tract_controls}
 (tract_controls <- tibble(TRACT = mytracts) %>%
-   left_join(ages %>% spread(agecat, count), by = c("TRACT" = "GEOID")) %>%
-   left_join(incs %>% spread(inccat, count), by = c("TRACT" = "GEOID"))
- 
+   left_join(ages  %>% spread(agecat,  count), by = c("TRACT" = "GEOID")) %>%
+   left_join(incs  %>% spread(inccat,  count), by = c("TRACT" = "GEOID")) %>%
+   left_join(works %>% spread(workcat, count), by = c("TRACT" = "GEOID")) %>%
+   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID"))
 )
 
 write_csv(tract_controls, "data/control_totals_tract.csv")
