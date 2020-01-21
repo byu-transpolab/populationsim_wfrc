@@ -36,8 +36,8 @@ To make this file, we start with the TAZ Shapefile included in the WFRC
 ```
 
 The only fields that are directly useful to us include the TAZ and County fields.
-We therefore need to do a join to get the block group and tract crosswalk. To do
-this, we'll use the `tigris` library to get the block groups for the counties in 
+We therefore need to do a join to get the tract crosswalk. To do
+this, we'll use the `tigris` library to get the tracts for the counties in 
 question and then do a spatial join.
 
 ```{r crosswalk}
@@ -47,12 +47,12 @@ crosswalk <- taz %>%
 
 county_list <- unique(crosswalk$CO_FIPS)
 
-bg <- block_groups(state = "49", county = county_list, class = "sf") %>%
+tr <- tracts(state = "49", county = county_list, class = "sf") %>%
   st_transform(4326) %>%
-  transmute(GEOID, bg_area = st_area(.))
+  transmute(GEOID, tr_area = st_area(.))
 ```
 
-As the map below shows, there are places where the block groups and TAZ boundaries
+As the map below shows, there are places where the tracts and TAZ boundaries
 do not line up perfectly. As a result, we need to discover places where the 
 many-to-many intersections can be ignored.
 
@@ -60,8 +60,8 @@ many-to-many intersections can be ignored.
 leaflet() %>%
   addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
   addPolygons(data = crosswalk, group = "TAZ", color = "red") %>%
-  addPolygons(data = bg, group = "Block Group") %>%
-  addLayersControl(overlayGroups = c("Block Group", "TAZ"))
+  addPolygons(data = tr, group = "Tract") %>%
+  addLayersControl(overlayGroups = c("Tract", "TAZ"))
 ```
 
 
@@ -71,11 +71,11 @@ intersected polygon and try to determine if the overlap is negligiible. If there
 is an overlap of less than 100 square meters we just drop it outright.
 
 ```{r intersection}
-cw_bg <- st_intersection(crosswalk, bg) %>%
+cw_tr <- st_intersection(crosswalk, tr) %>%
   mutate(intersect_area = st_area(.)) %>%
   filter(as.numeric(intersect_area) > 100)
 
-cw_bg %>%
+cw_tr %>%
   group_by(TAZID) %>%
   arrange(intersect_area, .by_group = TRUE)
 
@@ -91,7 +91,7 @@ puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010
   transmute(tract = str_c(STATEFP, COUNTYFP, TRACTCE), puma = PUMA5CE)
 
 (cw_bg  %>%
-  transmute(TAZID, block_group = GEOID, tract = substr(GEOID, 1, 11), 
+  transmute(TAZID, tract = GEOID,
             county = substr(GEOID, 1, 5)) %>%
   left_join(puma_tract, by = c("tract")) %>%
   st_set_geometry(NULL)  %>%
@@ -113,7 +113,9 @@ Attributes we want to control for include:
 ### TAZ-level controls
 
 The only TAZ-level control we get from WFRC is the number of households in each
-TAZ. Therefore, this will be the only control in this file.
+TAZ. Therefore, this will be the only control in this file. The MAG data is only
+available for 2020, so that's what we will be using even if 2017 or 2018 might
+be more appropriate.
 
 ```{r taz_control}
 tcf <- str_c("inputs/", dir("inputs/"))
@@ -125,5 +127,13 @@ taz_control <- lapply(tcf[grepl("SE_", tcf)], function(csv) {
 write_csv(taz_control, "data/control_totals_taz.csv")
 ```
 
+
+### Block-Group Level Controls
+
+The attributes available from the Census at the block group level include:
+
+```{r bg_control}
+
+```
 
 
