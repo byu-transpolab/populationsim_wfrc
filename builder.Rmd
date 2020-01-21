@@ -7,8 +7,97 @@ output: html_document
 
 ```{r setup, include=FALSE, cache = FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+library(sf)
+library(leaflet)
+library(tidyverse)
+library(tigris)
 ```
 
 This document provides a place for data manipulation and notes necessary to
 construct the PopulationSim implementation in the WFRC model region.
+
+## Geographies
+
+PopulationSim allows to have controls at 
+any definition provided in a crosswalk called `data/geo_cross_walk.csv`. We want
+to have controls at the following levels: 
+  - TAZ
+  - block group
+  - tract
+  - PUMA
+  
+To make this file, we start with the TAZ Shapefile included in the WFRC
+`_Inputs` folder (previously exported to `.geojson` for space and simplicity)
+
+```{r taz}
+(taz <- st_read("inputs/taz.geojson") %>% 
+   filter(CO_FIPS > 0) # remove external stations
+)
+```
+
+The only fields that are directly useful to us include the TAZ and County fields.
+We therefore need to do a join to get the block group and tract crosswalk. To do
+this, we'll use the `tigris` library to get the block groups for the counties in 
+question and then do a spatial join.
+
+```{r crosswalk}
+crosswalk <- taz %>% 
+  transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
+            taz_area = st_area(.))
+
+county_list <- unique(crosswalk$CO_FIPS)
+
+bg <- block_groups(state = "49", county = county_list, class = "sf") %>%
+  st_transform(4326) %>%
+  transmute(GEOID, bg_area = st_area(.))
+```
+
+As the map below shows, there are places where the block groups and TAZ boundaries
+do not line up perfectly. As a result, we need to discover places where the 
+many-to-many intersections can be ignored.
+
+```{r tazmap}
+leaflet() %>%
+  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
+  addPolygons(data = crosswalk, group = "TAZ", color = "red") %>%
+  addPolygons(data = bg, group = "Block Group") %>%
+  addLayersControl(overlayGroups = c("Block Group", "TAZ"))
+```
+
+
+To do this, we calculate the intersections of the two layers, which
+each have their areas pre-calculated. We then calculate the area of the
+intersected polygon and try to determine if the overlap is negligiible. If there
+is an overlap of less than 100 square meters we just drop it outright.
+
+```{r intersection}
+cw_bg <- st_intersection(crosswalk, bg) %>%
+  mutate(intersect_area = st_area(.)) %>%
+  filter(as.numeric(intersect_area) > 100)
+
+cw_bg %>%
+  group_by(TAZID) %>%
+  arrange(intersect_area, .by_group = TRUE)
+
+ggplot(cw_bg, aes(x = as.numeric(intersect_area) / as.numeric(taz_area))) + geom_histogram() + scale_x_log10()
+```
+
+There may be opportunities to refine this process further, but we'll go with it
+for now. Let's append the tract / PUMA lookup from the Census bureau
+
+```{r puma}
+
+puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt") %>%
+  transmute(tract = str_c(STATEFP, COUNTYFP, TRACTCE), puma = PUMA5CE)
+
+(cw_bg  %>%
+  transmute(TAZID, block_group = GEOID, tract = substr(GEOID, 1, 11), 
+            county = substr(GEOID, 1, 5)) %>%
+  left_join(puma_tract, by = c("tract")) %>%
+  st_set_geometry(NULL)  %>%
+  as_tibble() %>%
+  mutate(region = 1) %>%
+  write_csv("data/geo_cross_walk.csv"))
+```
+
 
