@@ -60,7 +60,7 @@ many-to-many intersections can be ignored.
 ```{r tazmap}
 leaflet() %>%
   addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
-  addPolygons(data = crosswalk, group = "TAZ", color = "red") %>%
+  addPolygons(data = taz, group = "TAZ", color = "red") %>%
   addPolygons(data = tr, group = "Tract") %>%
   addLayersControl(overlayGroups = c("Tract", "TAZ"))
 ```
@@ -72,7 +72,7 @@ intersected polygon and try to determine if the overlap is negligiible. If there
 is an overlap of less than 100 square meters we just drop it outright.
 
 ```{r intersection}
-cw_tr <- st_intersection(crosswalk, tr) %>%
+cw_tr <- st_intersection(taz, tr) %>%
   mutate(intersect_area = st_area(.)) %>%
   filter(as.numeric(intersect_area) > 100)
 
@@ -80,7 +80,7 @@ cw_tr %>%
   group_by(TAZID) %>%
   arrange(intersect_area, .by_group = TRUE)
 
-ggplot(cw_bg, aes(x = as.numeric(intersect_area))) + geom_histogram() + scale_x_log10()
+ggplot(cw_tr, aes(x = as.numeric(intersect_area))) + geom_histogram() + scale_x_log10()
 ```
 
 There may be opportunities to refine this process further, but we'll go with it
