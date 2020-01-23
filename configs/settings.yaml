@@ -35,7 +35,7 @@ data_dir: data
 # input_pre_processor input_table_list
 input_table_list:
   - tablename: households
-    filename : psam_h49.csv
+    filename : seed_households.csv
     index_col: hh_id
     column_map:
       # not sure what SERIALNO is, but it is not unique
@@ -43,7 +43,7 @@ input_table_list:
       hhnum: hh_id
   - tablename: persons
     # expression_filename: seed_persons_expressions.csv
-    filename : psam_p49.csv
+    filename : seed_persons.csv
     column_map:
       # SERIALNO: hh_id
       hhnum: hh_id
