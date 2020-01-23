@@ -300,6 +300,17 @@ write_csv(tract_controls, "data/control_totals_tract.csv")
 The uncompressed seed data is too large to commit, so we have committed compressed
 versions of the original files. 
 
+We need to clean and re-save the PUMS seed data files for households and for people.
+```{r pums_hh}
+pums_hh <- read_csv("inputs/psam_h49.csv.zip")
+
+seed_hh <- pums_hh %>%
+  mutate(hh_id = 1:nrow(.))
+
+write_csv(seed_hh, "data/seed_households.csv")
+```
+
+
 
 
 
