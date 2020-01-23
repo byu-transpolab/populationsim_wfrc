@@ -310,6 +310,16 @@ seed_hh <- pums_hh %>%
 write_csv(seed_hh, "data/seed_households.csv")
 ```
 
+```{r pums_persons}
+pums_persons <- read_csv("inputs/psam_h49.csv.zip")
+
+seed_per <- pums_persons
+
+
+write_csv(seed_per, "data/seed_persons.csv")
+```
+
+
 
 
 
