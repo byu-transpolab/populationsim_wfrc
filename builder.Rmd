@@ -45,6 +45,7 @@ To make this file, we start with the TAZ Shapefile included in the WFRC
 (taz <- st_read("inputs/taz.geojson") %>% 
    # remove external stations
    filter(CO_FIPS > 0)  %>%
+   filter(TAZID > 2200, TAZID < 2500) %>%
    # only keep TAZID and county
    transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
              taz_area = st_area(.))
@@ -97,7 +98,7 @@ cw_geomcolls <- cw_bg %>% filter(st_is(., "GEOMETRYCOLLECTION")) %>%
   st_cast(.) %>% filter(st_is(., "POLYGON"))
 
 # Add them back into a single dataframe, remove areas less than 500 m2
-cw_bg_clean <- rbind(cw_polygons, cw_mpolygons, cw_geomcolls) %>%
+cw_bg_clean <- rbind(cw_polygons, cw_mpolygons) %>%
   mutate(intersect_area = as.numeric(st_area(.))) %>%
   filter(intersect_area > 500)
 ```
@@ -154,7 +155,8 @@ tcf <- str_c("inputs/", dir("inputs/"))
 taz_control <- lapply(tcf[grepl("SE_", tcf)], function(csv) {
   read_csv(csv) %>% select(TAZ = TAZID, TOTHH)
 }) %>%
-  bind_rows()
+  bind_rows() %>%
+  filter(TAZ %in% crosswalk$TAZ)
 
 write_csv(taz_control, "data/control_totals_taz.csv")
 ```
