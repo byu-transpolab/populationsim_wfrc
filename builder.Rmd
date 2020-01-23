@@ -233,6 +233,20 @@ incs <- raw_incs %>%
 ```
 
 
+#### Number of Households
+```{r hhtotal}
+raw_hh <- get_acs("tract", variables = "B08202_001", state = "UT", county = county_list)
+
+hh <- raw_hh %>%
+  left_join(acsvars, by = c("variable" = "name")) %>%
+  separate(label, c("VAR", "total", "households"), sep = "!!") %>%
+  select(GEOID, estimate) %>% 
+  group_by(GEOID) %>% 
+  summarise(HHBASE = sum(estimate))
+
+```
+
+
 #### Tract Controls File
 Now, we write out the tract controls file.
 ```{r tract_controls}
@@ -240,7 +254,8 @@ Now, we write out the tract controls file.
    left_join(ages  %>% spread(agecat,  count), by = c("TRACT" = "GEOID")) %>%
    left_join(incs  %>% spread(inccat,  count), by = c("TRACT" = "GEOID")) %>%
    left_join(works %>% spread(workcat, count), by = c("TRACT" = "GEOID")) %>%
-   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID"))
+   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID")) %>% 
+   left_join(hh, by = c("TRACT" = "GEOID")) 
 )
 
 write_csv(tract_controls, "data/control_totals_tract.csv")
@@ -251,5 +266,7 @@ write_csv(tract_controls, "data/control_totals_tract.csv")
 
 The uncompressed seed data is too large to commit, so we have committed compressed
 versions of the original files. 
+
+
 
 

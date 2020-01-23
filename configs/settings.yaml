@@ -15,14 +15,13 @@ max_expansion_factor: 30
 
 # Geographic Settings
 # ------------------------------------------------------------------
-geographies: [PUMA, TRACT, TAZ]
+geographies: [REGION, PUMA, TRACT]
 seed_geography: PUMA
 
 
 # Tracing
 # ------------------------------------------------------------------
 trace_geography:
-  TAZ: 100
   TRACT: 49035112815
 
 
@@ -51,14 +50,14 @@ input_table_list:
       SPORDER: per_num
     # drop mixed type fields that appear to have been incorrectly generated
     drop_columns:
-      - indp02
-      - naicsp02
-      - occp02
-      - socp00
-      - occp10
-      - socp10
-      - indp07
-      - naicsp07
+    #  - indp02
+    #  - naicsp02
+    #  - occp02
+    #  - socp00
+    #  - occp10
+    #  - socp10
+    #  - indp07
+    #  - naicsp07
   - tablename: geo_cross_walk
     filename : geo_cross_walk.csv
     column_map:
@@ -78,7 +77,7 @@ total_hh_control: num_hh
 
 # Control Specification File Name
 # ------------------------------------------------------------------
-control_file_name: controls.csv
+control_file_name: controls_working.csv
 
 
 # Output Tables
