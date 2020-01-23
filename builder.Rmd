@@ -60,7 +60,7 @@ many-to-many intersections can be ignored.
 ```{r tazmap}
 leaflet() %>%
   addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
-  addPolygons(data = crosswalk, group = "TAZ", color = "red") %>%
+  addPolygons(data = taz, group = "TAZ", color = "red") %>%
   addPolygons(data = tr, group = "Tract") %>%
   addLayersControl(overlayGroups = c("Tract", "TAZ"))
 ```
@@ -72,7 +72,7 @@ intersected polygon and try to determine if the overlap is negligiible. If there
 is an overlap of less than 100 square meters we just drop it outright.
 
 ```{r intersection}
-cw_tr <- st_intersection(crosswalk, tr) %>%
+cw_tr <- st_intersection(taz, tr) %>%
   mutate(intersect_area = st_area(.)) %>%
   filter(as.numeric(intersect_area) > 100)
 
@@ -233,6 +233,20 @@ incs <- raw_incs %>%
 ```
 
 
+#### Number of Households
+```{r hhtotal}
+raw_hh <- get_acs("tract", variables = "B08202_001", state = "UT", county = county_list)
+
+hh <- raw_hh %>%
+  left_join(acsvars, by = c("variable" = "name")) %>%
+  separate(label, c("VAR", "total", "households"), sep = "!!") %>%
+  select(GEOID, estimate) %>% 
+  group_by(GEOID) %>% 
+  summarise(HHBASE = sum(estimate))
+
+```
+
+
 #### Tract Controls File
 Now, we write out the tract controls file.
 ```{r tract_controls}
@@ -240,11 +254,14 @@ Now, we write out the tract controls file.
    left_join(ages  %>% spread(agecat,  count), by = c("TRACT" = "GEOID")) %>%
    left_join(incs  %>% spread(inccat,  count), by = c("TRACT" = "GEOID")) %>%
    left_join(works %>% spread(workcat, count), by = c("TRACT" = "GEOID")) %>%
-   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID"))
+   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID")) %>% 
+   left_join(hh, by = c("TRACT" = "GEOID")) 
 )
 
 write_csv(tract_controls, "data/control_totals_tract.csv")
 ```
+
+
 
 
 
