@@ -15,7 +15,7 @@ max_expansion_factor: 30
 
 # Geographic Settings
 # ------------------------------------------------------------------
-geographies: [REGION, PUMA, TRACT]
+geographies: [REGION, PUMA, TRACT, TAZ]
 seed_geography: PUMA
 
 
@@ -60,8 +60,6 @@ input_table_list:
     #  - naicsp07
   - tablename: geo_cross_walk
     filename : geo_cross_walk.csv
-    column_map:
-      TRACTCE: TRACT
   - tablename: TAZ_control_data
     filename : control_totals_taz.csv
   - tablename: TRACT_control_data
@@ -77,7 +75,7 @@ total_hh_control: num_hh
 
 # Control Specification File Name
 # ------------------------------------------------------------------
-control_file_name: controls_working.csv
+control_file_name: controls.csv
 
 
 # Output Tables

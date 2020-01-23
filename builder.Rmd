@@ -120,7 +120,7 @@ puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010
   transmute(TRACT = str_c(STATEFP, COUNTYFP, TRACTCE), PUMA = PUMA5CE)
 
 (crosswalk <- cw_bg_clean  %>%
-  transmute(TAZID, 
+  transmute(TAZ = TAZID, 
             BLOCKGROUP = GEOID, 
             TRACT = substr(GEOID, 1, 11),
             COUNTY = substr(GEOID, 1, 5)) %>%
@@ -152,7 +152,7 @@ be more appropriate.
 ```{r taz_control}
 tcf <- str_c("inputs/", dir("inputs/"))
 taz_control <- lapply(tcf[grepl("SE_", tcf)], function(csv) {
-  read_csv(csv) %>% select(TAZID, TOTHH)
+  read_csv(csv) %>% select(TAZ = TAZID, TOTHH)
 }) %>%
   bind_rows()
 
