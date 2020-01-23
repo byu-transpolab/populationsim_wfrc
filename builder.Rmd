@@ -120,7 +120,9 @@ puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010
   transmute(TRACT = str_c(STATEFP, COUNTYFP, TRACTCE), PUMA = PUMA5CE)
 
 (crosswalk <- cw_bg_clean  %>%
-  transmute(TAZID, TRACT = substr(GEOID, 1, 11),
+  transmute(TAZID, 
+            BLOCKGROUP = GEOID, 
+            TRACT = substr(GEOID, 1, 11),
             COUNTY = substr(GEOID, 1, 5)) %>%
   left_join(puma_tract, by = c("TRACT")) %>%
   st_set_geometry(NULL)  %>%
@@ -168,7 +170,8 @@ The attributes available from the ACS include the following:
 First, we can collect a unique list of all the tracts we want to get controls for,
 alongside a complete list of all ACS variables
 ```{r tracts}
-mytracts <- unique(crosswalk$tract)
+mytracts <- unique(crosswalk$TRACT)
+mycounties <- unique(substr(crosswalk$COUNTY, 3, 5))
 acsvars <- load_variables(2018, "acs5", cache = TRUE)
 ```
 
@@ -177,7 +180,7 @@ Because these two values come in the same table, we will build them together.
 
 ```{r sizework}
 swvars <- str_c("B08202_", sprintf("%03d", c(2:5, 6, 9, 13, 18)))
-raw_sw <- get_acs("tract", variables = swvars, state = "UT", county = county_list)
+raw_sw <- get_acs("tract", variables = swvars, state = "UT", county = mycounties)
 
 size_work <- raw_sw %>% 
   left_join(acsvars, by = c("variable" = "name")) %>%
@@ -212,7 +215,7 @@ First we get the number of people of each age category.
 
 ```{r age}
 agevars <- str_c("B01001_", sprintf("%03d", c(3:25, 27:49)))
-raw_ages <- get_acs("tract", variables = agevars, state = "UT", county = county_list)
+raw_ages <- get_acs("tract", variables = agevars, state = "UT", county = mycounties)
   
 ages <- raw_ages %>%
   left_join(acsvars, by = c("variable" = "name")) %>%
@@ -223,11 +226,11 @@ ages <- raw_ages %>%
   mutate(
     numage = as.numeric(substr(age, 1, 2)),
     agecat = case_when(
-      numage %in% c(15:24) ~ "HHAGE1",
-      numage %in% c(25:54) ~ "HHAGE2",
-      numage %in% c(55:64) ~ "HHAGE3",
-      numage %in% c(65:99) ~ "HHAGE4",
-      TRUE ~ "HHAGE0" # children less than 15 not categorized in demo
+      numage %in% c(15:24) ~ "PAGE1",
+      numage %in% c(25:54) ~ "PAGE2",
+      numage %in% c(55:64) ~ "PAGE3",
+      numage %in% c(65:99) ~ "PAGE4",
+      TRUE ~ "PAGE0" # children less than 15 not categorized in demo
     )
   ) %>%
   
@@ -240,7 +243,7 @@ ages <- raw_ages %>%
 
 ```{r income}
 incvars <- str_c("B19001_", sprintf("%03d", c(2:17)))
-raw_incs <- get_acs("tract", variables = incvars, state = "UT", county = county_list)
+raw_incs <- get_acs("tract", variables = incvars, state = "UT", county = mycounties)
 
 incs <- raw_incs %>%
   left_join(acsvars, by = c("variable" = "name")) %>%
@@ -263,15 +266,14 @@ incs <- raw_incs %>%
 
 
 #### Number of Households
+
+We will put the number of households at the tract on the controls data frame, but
+we will not use it at this point.
 ```{r hhtotal}
-raw_hh <- get_acs("tract", variables = "B08202_001", state = "UT", county = county_list)
+raw_hh <- get_acs("tract", variables = "B08202_001", state = "UT", county = mycounties)
 
 hh <- raw_hh %>%
-  left_join(acsvars, by = c("variable" = "name")) %>%
-  separate(label, c("VAR", "total", "households"), sep = "!!") %>%
-  select(GEOID, estimate) %>% 
-  group_by(GEOID) %>% 
-  summarise(HHBASE = sum(estimate))
+  select(GEOID, HHBASE = estimate) 
 
 ```
 
