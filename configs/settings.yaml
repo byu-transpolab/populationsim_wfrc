@@ -51,12 +51,12 @@ input_table_list:
     # drop mixed type fields that appear to have been incorrectly generated
     drop_columns:
     #  - indp02
-    #  - naicsp02
+      - NAICSP
     #  - occp02
     #  - socp00
     #  - occp10
-    #  - socp10
-    #  - indp07
+      - SOCP
+      - RT
     #  - naicsp07
   - tablename: geo_cross_walk
     filename : geo_cross_walk.csv
