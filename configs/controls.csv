@@ -13,7 +13,7 @@ hh_inc_15,TRACT,households,500,HHINC1,(households.HHINCADJ > -999999999) & (hous
 hh_inc_15_30,TRACT,households,500,HHINC2,(households.HHINCADJ >21297) & (households.HHINCADJ <= 42593)
 hh_inc_30_60,TRACT,households,500,HHINC3,(households.HHINCADJ > 42593) & (households.HHINCADJ <= 85185)
 hh_inc_60_plus,TRACT,households,500,HHINC4,(households.HHINCADJ > 85185) & (households.HHINCADJ <= 999999999)
-hh_wrks_0,TRACT,households,1000,HHWORK0,households.NWESR == 0
-hh_wrks_1,TRACT,households,1000,HHWORK1,households.NWESR == 1
-hh_wrks_2,TRACT,households,1000,HHWORK2,households.NWESR == 2
-hh_wrks_3_plus,TRACT,households,1000,HHWORK3,households.NWESR >= 3
+hh_wrks_0,TRACT,households,1000,HHWORK0,households.WIF == 0
+hh_wrks_1,TRACT,households,1000,HHWORK1,households.WIF == 1
+hh_wrks_2,TRACT,households,1000,HHWORK2,households.WIF == 2
+hh_wrks_3_plus,TRACT,households,1000,HHWORK3,households.WIF >= 3
