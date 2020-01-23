@@ -1,0 +1,14 @@
+target,geography,seed_table,importance,control_field,expression
+num_hh,TRACT,households,1000000000,HHBASE,(households.WGTP > 0) & (households.WGTP < np.inf)
+hh_size_1,TRACT,households,5000,HHSIZE1,households.NP == 1
+hh_size_2,TRACT,households,5000,HHSIZE2,households.NP == 2
+hh_size_3,TRACT,households,5000,HHSIZE3,households.NP == 3
+hh_size_4_plus,TRACT,households,5000,HHSIZE4,households.NP >= 4
+hh_inc_15,TRACT,households,500,HHINC1,(households.HHINCADJ > -999999999) & (households.HHINCADJ <= 21297)
+hh_inc_15_30,TRACT,households,500,HHINC2,(households.HHINCADJ >21297) & (households.HHINCADJ <= 42593)
+hh_inc_30_60,TRACT,households,500,HHINC3,(households.HHINCADJ > 42593) & (households.HHINCADJ <= 85185)
+hh_inc_60_plus,TRACT,households,500,HHINC4,(households.HHINCADJ > 85185) & (households.HHINCADJ <= 999999999)
+hh_wrks_0,TRACT,households,1000,HHWORK0,households.WIF == 0
+hh_wrks_1,TRACT,households,1000,HHWORK1,households.WIF == 1
+hh_wrks_2,TRACT,households,1000,HHWORK2,households.WIF == 2
+hh_wrks_3_plus,TRACT,households,1000,HHWORK3,households.WIF >= 3
