@@ -17,70 +17,99 @@ library(tidycensus)
 This document provides a place for data manipulation and notes necessary to
 construct the PopulationSim implementation in the WFRC model region.
 
-## Geographies
+## Geographic Cross-walk
 
-PopulationSim allows to have controls at 
-any definition provided in a crosswalk called `data/geo_cross_walk.csv`. We want
-to have controls at the following levels: 
-  - TAZ
+PopulationSim allows to have controls at any definition provided in a crosswalk
+called `data/geo_cross_walk.csv`. We want to have controls at the following
+levels:
+
   - block group
   - tract
   - PUMA
-  
+
+In addition to this, we need to include the TAZ on the synthetic population so we
+can apply the skims in ActivitySim. To build this file, we will do the following:
+
+  - Begin with the TAZ shapefile
+  - Collect a list of block groups population centroids from the Census TIGER
+  database
+  - Determine which TAZ each block group centroid is located in.
+  - If there are TAZ that do not contain a block group centroid, we will divide
+  the blocks spatially and remap.
+    
+
 To make this file, we start with the TAZ Shapefile included in the WFRC
 `_Inputs` folder (previously exported to `.geojson` for space and simplicity)
 
 ```{r taz}
 (taz <- st_read("inputs/taz.geojson") %>% 
-   filter(CO_FIPS > 0) # remove external stations
+   # remove external stations
+   filter(CO_FIPS > 0)  %>%
+   # only keep TAZID and county
+   transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
+             taz_area = st_area(.))
 )
 ```
 
-The only fields that are directly useful to us include the TAZ and County fields.
-We therefore need to do a join to get the tract crosswalk. To do
-this, we'll use the `tigris` library to get the tracts for the counties in 
-question and then do a spatial join.
+Now, we want to get a list of the population-weighted centroid for each block
+group.
 
 ```{r crosswalk}
-taz <- taz %>% 
-  transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
-            taz_area = st_area(.))
-
-county_list <- unique(taz$CO_FIPS)
-
-tr <- tracts(state = "49", county = county_list, class = "sf") %>%
-  st_transform(4326) %>%
-  transmute(GEOID, tr_area = st_area(.))
+bg_centroids <- read_csv(
+  "https://www2.census.gov/geo/docs/reference/cenpop2010/blkgrp/CenPop2010_Mean_BG49.txt",
+  col_types = list(STATEFP = col_character(), BLKGRPCE = col_character())
+) %>%
+  # filter to TAZ region
+  filter(COUNTYFP %in% taz$CO_FIPS) %>%
+  transmute(GEOID = str_c(STATEFP, COUNTYFP, TRACTCE, BLKGRPCE), LATITUDE, LONGITUDE) %>%
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
 ```
 
-As the map below shows, there are places where the tracts and TAZ boundaries
-do not line up perfectly. As a result, we need to discover places where the 
-many-to-many intersections can be ignored.
+The map below suggests that will need some kind of control at the TAZ level. 
+The only one we have available to us is the number of households, but that's 
+probably okay.
 
 ```{r tazmap}
 leaflet() %>%
   addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
   addPolygons(data = taz, group = "TAZ", color = "red") %>%
-  addPolygons(data = tr, group = "Tract") %>%
-  addLayersControl(overlayGroups = c("Tract", "TAZ"))
+  addCircleMarkers(data = bg_centroids, group = "bg") %>%
+  addLayersControl(overlayGroups = c("BG", "TAZ"))
 ```
-
-
-To do this, we calculate the intersections of the two layers, which
-each have their areas pre-calculated. We then calculate the area of the
-intersected polygon and try to determine if the overlap is negligiible. If there
-is an overlap of less than 100 square meters we just drop it outright.
+ 
+As a result, we need to calculate the spatial intersection of the TAZ and Block Groups
+layers. This generates many sliver polygons, which we remove by simply asserting 
+that an area has to have an area larger than 500 square meters. Beyond this, we check
+that all TAZ are represented.
 
 ```{r intersection}
-cw_tr <- st_intersection(taz, tr) %>%
-  mutate(intersect_area = st_area(.)) %>%
-  filter(as.numeric(intersect_area) > 100)
+bg <- block_groups("UT", county = unique(taz$CO_FIPS), class = "sf") %>%
+  st_transform(4326) %>%
+  transmute(GEOID, bg_area = st_area(.))
 
-cw_tr %>%
-  group_by(TAZID) %>%
-  arrange(intersect_area, .by_group = TRUE)
+# This generates lots of sliver and point and line intersections
+cw_bg <- st_intersection(taz, bg) 
 
-ggplot(cw_tr, aes(x = as.numeric(intersect_area))) + geom_histogram() + scale_x_log10()
+# so we filter out all of the points and linestrings
+cw_polygons  <- cw_bg %>% filter(st_is(., "POLYGON"))
+cw_mpolygons <- cw_bg %>% filter(st_is(., "MULTIPOLYGON"))
+cw_geomcolls <- cw_bg %>% filter(st_is(., "GEOMETRYCOLLECTION")) %>%
+  st_cast(.) %>% filter(st_is(., "POLYGON"))
+
+# Add them back into a single dataframe, remove areas less than 500 m2
+cw_bg_clean <- rbind(cw_polygons, cw_mpolygons, cw_geomcolls) %>%
+  mutate(intersect_area = as.numeric(st_area(.))) %>%
+  filter(intersect_area > 500)
+```
+
+The resulting intersection file is pretty complex; we've gone from `r nrow(taz)` 
+TAZs to `r nrow(cw_bg_clean)` objects in the crosswalk, but that will be fine for
+now.
+
+```{r cw_bg_map}
+leaflet(cw_bg_clean) %>%
+  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
+  addPolygons()
 ```
 
 There may be opportunities to refine this process further, but we'll go with it
@@ -88,15 +117,15 @@ for now. Let's append the tract / PUMA lookup from the Census bureau
 
 ```{r puma}
 puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt") %>%
-  transmute(tract = str_c(STATEFP, COUNTYFP, TRACTCE), puma = PUMA5CE)
+  transmute(TRACT = str_c(STATEFP, COUNTYFP, TRACTCE), PUMA = PUMA5CE)
 
-(crosswalk <- cw_tr  %>%
-  transmute(TAZID, tract = GEOID,
-            county = substr(GEOID, 1, 5)) %>%
-  left_join(puma_tract, by = c("tract")) %>%
+(crosswalk <- cw_bg_clean  %>%
+  transmute(TAZID, TRACT = substr(GEOID, 1, 11),
+            COUNTY = substr(GEOID, 1, 5)) %>%
+  left_join(puma_tract, by = c("TRACT")) %>%
   st_set_geometry(NULL)  %>%
   as_tibble() %>%
-  mutate(region = 1))
+  mutate(REGION = 1))
 
 write_csv(crosswalk, "data/geo_cross_walk.csv")
 ```
