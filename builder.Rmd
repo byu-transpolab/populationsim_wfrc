@@ -302,18 +302,27 @@ versions of the original files.
 
 We need to clean and re-save the PUMS seed data files for households and for people.
 ```{r pums_hh}
-pums_hh <- read_csv("inputs/psam_h49.csv.zip")
+pums_hh <- read_csv("inputs/psam_h49.csv.zip", 
+                    col_types = list(SERIALNO = col_character(),
+                                     NP = col_integer(),
+                                     FINCP = col_number(),
+                                     ADJINC = col_number()))
 
 seed_hh <- pums_hh %>%
-  mutate(hh_id = 1:nrow(.))
+  mutate(hh_id = 1:nrow(.)) %>%
+  filter(NP > 0) %>%
+  mutate(HHINCADJ = FINCP * ADJINC)
 
 write_csv(seed_hh, "data/seed_households.csv")
 ```
 
 ```{r pums_persons}
-pums_persons <- read_csv("inputs/psam_h49.csv.zip")
+pums_persons <- read_csv("inputs/psam_p49.csv.zip",
+                         col_types = list(SERIALNO = col_character())
+                         )
 
-seed_per <- pums_persons
+seed_per <- pums_persons %>%
+  left_join(seed_hh %>% select(SERIALNO, hh_id))
 
 
 write_csv(seed_per, "data/seed_persons.csv")
