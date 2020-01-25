@@ -319,7 +319,21 @@ seed_per <- pums_persons
 write_csv(seed_per, "data/seed_persons.csv")
 ```
 
+#### Remove NA fields from seed files
+Replace NA fields with a negative integer to avoid errors
+```{r remove_na}
+replace_na <- function(x) {
+  ifelse(is.na(x),-8,x)
+}
 
+clean_hh <- read.csv("data/seed_households.csv") %>% 
+  mutate_all(replace_na) %>% 
+  write_csv("data/seed_households.csv")
+
+clean_per <- read.csv("data/seed_persons.csv") %>% 
+  mutate_all(replace_na) %>% 
+  write_csv("data/seed_persons.csv")
+```
 
 
 
