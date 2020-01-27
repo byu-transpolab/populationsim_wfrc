@@ -101,17 +101,17 @@ output_synthetic_population:
   households:
     filename: synthetic_households.csv
     columns:
-      - NP
-      - AGEHOH
+      #- NP
+      #- AGEHOH
       - HHINCADJ
-      - NWESR
+      #- NWESR
   persons:
     filename: synthetic_persons.csv
     columns:
       - per_num
       - AGEP
-      - OSUTAG
-      - OCCP
+      #- OSUTAG
+      #- OCCP
 
 
 # Steps for base mode

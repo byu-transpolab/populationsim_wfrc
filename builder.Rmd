@@ -307,16 +307,39 @@ pums_hh <- read_csv("inputs/psam_h49.csv.zip")
 seed_hh <- pums_hh %>%
   mutate(hh_id = 1:nrow(.))
 
-write_csv(seed_hh, "data/seed_households.csv")
+replace_na <- function(x) {
+  ifelse(is.na(x),0,x)
+}
+
+clean_hh <- seed_hh %>% 
+  mutate_all(replace_na) %>% 
+  transform(HHINCADJ = as.numeric(HINCP) * as.numeric(ADJINC)/1000000)
+
+write_csv(clean_hh, "data/seed_households.csv")
 ```
 
 ```{r pums_persons}
-pums_persons <- read_csv("inputs/psam_h49.csv.zip")
+pums_persons <- read_csv("inputs/psam_p49.csv.zip")
 
 seed_per <- pums_persons
 
+clean_per <- seed_per %>% 
+  mutate_all(replace_na) %>% 
+  transform(WGTP = as.numeric(PWGTP)) %>% 
+  mutate(hh_id = 1:nrow(.))
 
-write_csv(seed_per, "data/seed_persons.csv")
+#This section to add hh_id doesn't work yet, I manually added it in Excel for now
+hh <- 0  
+for (i in nrow(clean_per)){
+  pernum <- clean_per[i,"SPORDER"]
+  if (as.numeric(pernum) == 1){
+    hh <- hh + 1
+    clean_per$hh_id[i] = hh
+  }
+  else{clean_per$hh_id[i] = hh}
+}
+
+write_csv(clean_per, "data/seed_persons.csv")
 ```
 
 #### Remove NA fields from seed files
