@@ -45,6 +45,7 @@ To make this file, we start with the TAZ Shapefile included in the WFRC
 (taz <- st_read("inputs/taz.geojson") %>% 
    # remove external stations
    filter(CO_FIPS > 0)  %>%
+   # TODO: remove filter to provo/orem
    filter(TAZID > 2200, TAZID < 2500) %>%
    # only keep TAZID and county
    transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
@@ -98,6 +99,7 @@ cw_geomcolls <- cw_bg %>% filter(st_is(., "GEOMETRYCOLLECTION")) %>%
   st_cast(.) %>% filter(st_is(., "POLYGON"))
 
 # Add them back into a single dataframe, remove areas less than 500 m2
+# TODO: when we add full region, put the geomcolls back in.
 cw_bg_clean <- rbind(cw_polygons, cw_mpolygons) %>%
   mutate(intersect_area = as.numeric(st_area(.))) %>%
   filter(intersect_area > 500)
@@ -339,6 +341,7 @@ clean_per <- seed_per %>%
 
 #This section to add hh_id doesn't work yet, I manually added it in Excel for now
 hh <- 0  
+# TODO: replace this with a join on the HH_ID field, please!!
 for (i in nrow(clean_per)){
   pernum <- clean_per[i,"SPORDER"]
   if (as.numeric(pernum) == 1){
