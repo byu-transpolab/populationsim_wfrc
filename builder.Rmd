@@ -370,6 +370,18 @@ clean_per <- read.csv("data/seed_persons.csv") %>%
   write_csv("data/seed_persons.csv")
 ```
 
+### Meta Controls
+PopulationSim requires (we think) at least some region-level controls. We will
+simply sum up the total households in the controls data to work with this.
+
+```{r meta}
+(meta <- tract_controls %>%
+  summarise(region = 1,
+            totalHH = sum(HHBASE),
+            totalPOP = sum(PAGE0) +  sum(PAGE1) +  sum(PAGE2) +  sum(PAGE3) +  sum(PAGE4)))
+write_csv(meta, "data/control_totals_meta.csv")
+```
+
 
 
 
