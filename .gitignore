@@ -3,3 +3,4 @@ output/*
 .Rhistory
 data/seed_households.csv
 data/seed_persons.csv
+builder_cache/*
