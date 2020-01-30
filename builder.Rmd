@@ -321,6 +321,8 @@ replace_na <- function(x) {
 seed_hh <- pums_hh %>%
   # remove empty households
   filter(NP > 0) %>%
+  # remove households from outside the region
+  filter(PUMA %in% crosswalk$PUMA) %>%
   mutate(
     # create unique hh_id field
     hh_id = 1:nrow(.),
@@ -338,8 +340,8 @@ pums_persons <- read_csv(
 )
 
 seed_per <- pums_persons %>%
-  # join hhid field
-  left_join(seed_hh %>% select(SERIALNO, hh_id)) %>%
+  # join hhid field, and only keep households we filtered down to.
+  inner_join(seed_hh %>% select(SERIALNO, hh_id)) %>%
   # replace NA values with something less stupid
   mutate_at(.vars = vars(PWGTP, AGEP), replace_na)
 ```
