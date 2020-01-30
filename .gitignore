@@ -1,5 +1,5 @@
 output/*
 .Rproj.user
-data/psam_h49.csv
-data/psam_p49.csv
 .Rhistory
+data/seed_households.csv
+data/seed_persons.csv
