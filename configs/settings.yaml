@@ -6,7 +6,7 @@
 # Algorithm/Software Configuration
 # ------------------------------------------------------------------
 INTEGERIZE_WITH_BACKSTOPPED_CONTROLS: True
-SUB_BALANCE_WITH_FLOAT_SEED_WEIGHTS: False
+SUB_BALANCE_WITH_FLOAT_SEED_WEIGHTS: True
 GROUP_BY_INCIDENCE_SIGNATURE: True
 USE_SIMUL_INTEGERIZER: True
 USE_CVXPY: False
