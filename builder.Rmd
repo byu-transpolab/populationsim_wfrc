@@ -14,126 +14,98 @@ library(tigris)
 library(tidycensus)
 ```
 
-This document provides a place for data manipulation and notes necessary to
-construct the PopulationSim implementation in the WFRC model region.
+Constructing a PopulationSim implementation is not a trivial task. In this
+document, we guide the users through constructing a basic PopulationSim
+scenario. 
 
-## Geographic Cross-walk
+PopulationSim allows users to create controls at multiple levels. In this case
+we are going to create three levels of controls:
 
-PopulationSim allows to have controls at any definition provided in a crosswalk
-called `data/geo_cross_walk.csv`. We want to have controls at the following
-levels:
+  1. Region-wide: total population
+  2. Tract-level: household size and income, and person age
+  3. TAZ level: number of households
+  
+### Obtain geometries
+We are going to build this synthetic population for Provo and Orem, Utah. This
+involves the PUMAs `49002` and `49003`. We can get the census tracts these PUMAs
+contain from the Census Bureau's Tract / PUMA lookup file. 
 
-  - block group
-  - tract
-  - PUMA
+```{r puma}
+puma_url <- "https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt"
+puma_tract <- read_csv(puma_url, col_types = list(PUMA5CE = col_character())) %>%
+  transmute(
+    TRACT = str_c(STATEFP, COUNTYFP, TRACTCE),  
+    PUMA = PUMA5CE
+  ) %>%
+  filter(PUMA %in% c("49002", "49003"))
+```
 
-In addition to this, we need to include the TAZ on the synthetic population so we
-can apply the skims in ActivitySim. To build this file, we will do the following:
+We also want to get the geographic boundaries layer for these tracts. We get
+this directly from the Census.
 
-  - Begin with the TAZ shapefile
-  - Collect a list of block groups population centroids from the Census TIGER
-  database
-  - Determine which TAZ each block group centroid is located in.
-  - If there are TAZ that do not contain a block group centroid, we will divide
-  the blocks spatially and remap.
-    
+```{r tracts, message = FALSE}
+tr <- tracts("UT", county = unique(substr(puma_tract$TRACT, 3, 5)), 
+             class = "sf") %>%
+  st_transform(4326) %>%
+  transmute(GEOID) %>%
+  left_join(puma_tract, by = c("GEOID" = "TRACT")) %>%
+  filter(!is.na(PUMA))
+```
 
-To make this file, we start with the TAZ Shapefile included in the WFRC
-`_Inputs` folder (previously exported to `.geojson` for space and simplicity)
+The last step we need is the list of TAZs that intersect with these tracts. We
+use a TAZ file obtained from the Mountainland Association of Government travel 
+model. We filter the tracts based on whether they intersect.
 
 ```{r taz}
-(taz <- st_read("inputs/taz.geojson") %>% 
-   # remove external stations
-   filter(CO_FIPS > 0)  %>%
-   # TODO: remove filter to provo/orem
-   filter(TAZID > 2200, TAZID < 2500) %>%
-   # only keep TAZID and county
-   transmute(TAZID, CO_FIPS = sprintf("%03d", CO_FIPS), ST_FIPS = "49", 
-             taz_area = st_area(.))
-)
+taz <- st_read("inputs/taz.geojson") %>% 
+  mutate(TAZ = as.character(TAZID)) %>%
+  # remove external stations
+  filter(CO_FIPS > 0) %>%
+  select(TAZ) %>%
+  
+  # remove taz that do not map to a tract
+  st_join(tr) %>% filter(!is.na(PUMA)) %>%
+  
+  # remove duplicates of TAZ that map to many tracts
+  group_by(TAZ) %>% slice(1) %>% ungroup()
 ```
 
-Now, we want to get a list of the population-weighted centroid for each block
-group.
-
-```{r crosswalk}
-bg_centroids <- read_csv(
-  "https://www2.census.gov/geo/docs/reference/cenpop2010/blkgrp/CenPop2010_Mean_BG49.txt",
-  col_types = list(STATEFP = col_character(), BLKGRPCE = col_character())
-) %>%
-  # filter to TAZ region
-  filter(COUNTYFP %in% taz$CO_FIPS) %>%
-  transmute(GEOID = str_c(STATEFP, COUNTYFP, TRACTCE, BLKGRPCE), LATITUDE, LONGITUDE) %>%
-  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
-```
-
-The map below suggests that will need some kind of control at the TAZ level. 
-The only one we have available to us is the number of households, but that's 
-probably okay.
+The map below shows the TAZ and Tract boundaries for our controls. 
+As the map shows, there is not a perfect correlation between the boundaries of the
+TAZ and tract layers. Nevertheless to make the geographic crosswalk we will
+use the simplifying assumption that each TAZ belongs to the tract that contains
+the TAZ centroid. The TAZ covering Utah Lake will be removed when we do this.
 
 ```{r tazmap}
 leaflet() %>%
   addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
+  addPolygons(data = tr, group = "Tract", color = "blue") %>%
   addPolygons(data = taz, group = "TAZ", color = "red") %>%
-  addCircleMarkers(data = bg_centroids, group = "bg") %>%
-  addLayersControl(overlayGroups = c("BG", "TAZ"))
-```
- 
-As a result, we need to calculate the spatial intersection of the TAZ and Block Groups
-layers. This generates many sliver polygons, which we remove by simply asserting 
-that an area has to have an area larger than 500 square meters. Beyond this, we check
-that all TAZ are represented.
-
-```{r intersection, error = TRUE, message = FALSE}
-bg <- block_groups("UT", county = unique(taz$CO_FIPS), class = "sf") %>%
-  st_transform(4326) %>%
-  transmute(GEOID, bg_area = st_area(.))
-
-# This generates lots of sliver and point and line intersections
-cw_bg <- st_intersection(taz, bg) 
-
-# so we filter out all of the points and linestrings
-cw_polygons  <- cw_bg %>% filter(st_is(., "POLYGON"))
-cw_mpolygons <- cw_bg %>% filter(st_is(., "MULTIPOLYGON"))
-cw_geomcolls <- cw_bg %>% filter(st_is(., "GEOMETRYCOLLECTION")) %>%
-  st_cast(.) %>% filter(st_is(., "POLYGON"))
-
-# Add them back into a single dataframe, remove areas less than 500 m2
-# TODO: when we add full region, put the geomcolls back in.
-cw_bg_clean <- rbind(cw_polygons, cw_mpolygons) %>%
-  mutate(intersect_area = as.numeric(st_area(.))) %>%
-  filter(intersect_area > 500)
+  addLayersControl(overlayGroups = c("Tract", "TAZ"))
 ```
 
-The resulting intersection file is pretty complex; we've gone from `r nrow(taz)` 
-TAZs to `r nrow(cw_bg_clean)` objects in the crosswalk, but that will be fine for
-now.
+## Geographic Cross-walk
 
-```{r cw_bg_map}
-leaflet(cw_bg_clean) %>%
-  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
-  addPolygons()
+To make the crosswalk we locate the taz centroids within each tract, and then
+append the PUMA, county, and region codes. The plot below visualizes these points
+as well as the TAZ, tract, and PUMA ids. The resulting table is the geographic 
+crosswalk required by PopulationSim.
+
+```{r crosswalk}
+crosswalk <- taz %>%
+  # determine which tract the taz is in
+  select(TAZ) %>% st_centroid() %>%
+  st_join(tr, st_within) %>% filter(!is.na(GEOID)) %>%
+  # fill out remainder of columns
+  rename(TRACT = GEOID) %>% mutate(REGION = "1")
+
+plot(crosswalk %>% mutate(TAZ = as.numeric(TAZ)))
 ```
 
-There may be opportunities to refine this process further, but we'll go with it
-for now. Let's append the tract / PUMA lookup from the Census bureau
-
-```{r puma}
-puma_tract <- read_csv("https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt") %>%
-  transmute(TRACT = str_c(STATEFP, COUNTYFP, TRACTCE), PUMA = PUMA5CE)
-
-(crosswalk <- cw_bg_clean  %>%
-  transmute(TAZ = TAZID, 
-            BLOCKGROUP = GEOID, 
-            TRACT = substr(GEOID, 1, 11),
-            COUNTY = substr(GEOID, 1, 5)) %>%
-  left_join(puma_tract, by = c("TRACT")) %>%
-  st_set_geometry(NULL)  %>%
-  as_tibble() %>%
-  mutate(REGION = 1))
-
-write_csv(crosswalk, "data/geo_cross_walk.csv")
+```{r print_crosswalk}
+(crosswalk <- crosswalk %>% st_set_geometry(NULL) %>% as_tibble())
 ```
+
 
 ## Controls
 
@@ -174,7 +146,7 @@ The attributes available from the ACS include the following:
 
 First, we can collect a unique list of all the tracts we want to get controls for,
 alongside a complete list of all ACS variables
-```{r tracts}
+```{r tract_list}
 mytracts <- unique(crosswalk$TRACT)
 mycounties <- unique(substr(crosswalk$COUNTY, 3, 5))
 acsvars <- load_variables(2018, "acs5", cache = TRUE)
