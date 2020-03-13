@@ -26,7 +26,6 @@ we are going to create three levels of controls:
   2. Tract-level: household size and income, and person age
   3. TAZ level: number of households
   
-### Obtain geometries
 We are going to build this synthetic population for Provo and Orem, Utah. This
 involves the PUMAs `49002` and `49003`. We can get the census tracts these PUMAs
 contain from the Census Bureau's Tract / PUMA lookup file. 
@@ -123,20 +122,16 @@ Attributes we want to control for include:
 The only TAZ-level control we get from WFRC is the number of households in each
 TAZ. Therefore, this will be the only control in this file. The MAG data is only
 available for 2020, so that's what we will be using even if 2017 or 2018 might
-be more appropriate.
+be more appropriate. We filter the list of controls to the TAZ that we are
+getting in the crosswalk. We need to ensure that the TAZ code is a character
+string and the household target is an integer.
 
 ```{r taz_control}
-tcf <- str_c("inputs/", dir("inputs/"))
-taz_control <- lapply(tcf[grepl("SE_", tcf)], function(csv) {
-  read_csv(csv) %>% select(TAZ = TAZID, HHBASE = TOTHH) %>%
-    mutate(HHBASE = ceiling(HHBASE))
-}) %>%
-  bind_rows() %>%
-  filter(HHBASE > 0) %>%
-  filter(TAZ %in% crosswalk$TAZ)
-write_csv(taz_control, "data/control_totals_taz.csv")
+# read socioeconomic data file
+(taz_control <- read_csv("inputs/SE_MAG_2020.csv") %>% 
+  transmute(TAZ = as.character(TAZID), HHBASE = as.integer(ceiling(TOTHH))) %>% 
+  filter(TAZ %in% crosswalk$TAZ))
 ```
-
 
 ### Tract-Level Controls
 The attributes available from the ACS include the following:
@@ -149,12 +144,14 @@ First, we can collect a unique list of all the tracts we want to get controls fo
 alongside a complete list of all ACS variables
 ```{r tract_list}
 mytracts <- unique(crosswalk$TRACT)
-mycounties <- unique(substr(crosswalk$COUNTY, 3, 5))
+mycounties <- unique(substr(crosswalk$TRACT, 3, 5))
 acsvars <- load_variables(2018, "acs5", cache = TRUE)
 ```
 
 #### Household size and workers
 Because these two values come in the same table, we will build them together.
+In both cases the top-line category contains all households with that many
+workers / persons or more.
 
 ```{r sizework}
 swvars <- str_c("B08202_", sprintf("%03d", c(2:5, 6, 9, 13, 18)))
@@ -176,7 +173,7 @@ works <- size_work %>%
       TRUE ~ "HHWORK0"
     )
   ) %>% 
-  group_by(GEOID, workcat) %>% summarize(count = sum(estimate))
+  group_by(GEOID, workcat) %>% summarize(count = as.integer(sum(estimate)))
 
 sizes <- size_work %>%
   filter(!grepl("work", label)) %>%
@@ -184,12 +181,12 @@ sizes <- size_work %>%
    num_size = str_extract(label, "\\d+"),
    sizecat = str_c("HHSIZE", num_size) 
   ) %>%
-  group_by(GEOID, sizecat) %>% summarize(count = sum(estimate))
+  group_by(GEOID, sizecat) %>% summarize(count = as.integer(sum(estimate)))
 ```
 
 
 #### Age
-First we get the number of people of each age category.
+This is the number of people in each age category.
 
 ```{r age}
 agevars <- str_c("B01001_", sprintf("%03d", c(3:25, 27:49)))
@@ -214,10 +211,15 @@ ages <- raw_ages %>%
   
   # consolidate men and women
   group_by(GEOID, agecat) %>%
-  summarise(count = sum(estimate))
+  summarise(count = as.integer(sum(estimate)))
 ```
 
 #### Income
+This is the household income variable, which is categorized as follows:
+  - <$15k
+  - \$15k - \$30k
+  - \$30k - \$60k
+  - > $60k
 
 ```{r income}
 incvars <- str_c("B19001_", sprintf("%03d", c(2:17)))
@@ -239,39 +241,35 @@ incs <- raw_incs %>%
     )
   ) %>%
   group_by(GEOID, inccat) %>%
-  summarise(count = sum(estimate))
-```
-
-
-#### Number of Households
-
-We will put the number of households at the tract on the controls data frame, but
-we will not use it at this point.
-```{r hhtotal}
-raw_hh <- get_acs("tract", variables = "B08202_001", state = "UT", county = mycounties)
-
-hh <- raw_hh %>%
-  select(GEOID, HHBASE = estimate) 
-
+  summarise(count = as.integer(sum(estimate)))
 ```
 
 
 #### Tract Controls File
-Now, we write out the tract controls file.
+When all of the controls have been gathered, we can put them into one large table.
+
 ```{r tract_controls}
 (tract_controls <- tibble(TRACT = mytracts) %>%
    left_join(ages  %>% spread(agecat,  count), by = c("TRACT" = "GEOID")) %>%
    left_join(incs  %>% spread(inccat,  count), by = c("TRACT" = "GEOID")) %>%
    left_join(works %>% spread(workcat, count), by = c("TRACT" = "GEOID")) %>%
-   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID")) %>% 
-   left_join(hh, by = c("TRACT" = "GEOID")) 
+   left_join(sizes %>% spread(sizecat, count), by = c("TRACT" = "GEOID"))
 )
-
-write_csv(tract_controls, "data/control_totals_tract.csv")
 ```
 
+### Meta Controls
+PopulationSim requires (we think) at least some region-level controls. We will
+simply sum up the total population in the controls data to work with this.
 
-### PUMS Seed Data
+```{r meta}
+(meta <- tract_controls %>%
+  summarise(
+    REGION = 1, 
+    totalPOP = sum(PAGE0) +  sum(PAGE1) +  sum(PAGE2) + 
+      sum(PAGE3) +  sum(PAGE4)))
+```
+
+## PUMS Seed Data
 
 The uncompressed seed data is too large to commit, so we have committed
 compressed versions of the original files. We need to clean and re-save the PUMS
@@ -295,8 +293,7 @@ replace_na <- function(x) {
 
 seed_hh <- pums_hh %>%
   # remove empty households
-  filter(NP > 0) %>%
-  filter(WGTP > 0) %>%
+  filter(NP > 0) %>% filter(WGTP > 0) %>%
   # remove households from outside the region
   filter(PUMA %in% crosswalk$PUMA) %>%
   mutate(
@@ -322,25 +319,25 @@ seed_per <- pums_persons %>%
   mutate_at(.vars = vars(PWGTP, AGEP), replace_na)
 ```
 
-#### Remove NA fields from seed files
-Replace NA fields with a negative integer to avoid errors and write to disk.
-```{r remove_na}
-seed_hh %>% write_csv("data/seed_households.csv")
 
-seed_per %>% write_csv("data/seed_persons.csv")
-```
 
-### Meta Controls
-PopulationSim requires (we think) at least some region-level controls. We will
-simply sum up the total population in the controls data to work with this.
 
-```{r meta}
-(meta <- tract_controls %>%
-  summarise(REGION = 1,
-            totalPOP = sum(PAGE0) +  sum(PAGE1) +  sum(PAGE2) +  sum(PAGE3) +  sum(PAGE4)))
+## Write out to files
+
+With all of the data compiled, we now write out the files to the `data/` folder
+
+```{r write out}
+# Controls
 write_csv(meta, "data/control_totals_meta.csv")
+write_csv(tract_controls, "data/control_totals_tract.csv")
+write_csv(taz_control, "data/control_totals_taz.csv")
+
+# Seed
+write_csv(seed_hh, "data/seed_households.csv")
+write_csv(seed_per, "data/seed_persons.csv")
+
+# Crosswalk
+write_csv(crosswalk, "data/geo_cross_walk.csv")
 ```
-
-
 
 
