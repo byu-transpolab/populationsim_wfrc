@@ -36,7 +36,7 @@ logging:
       filename: !!python/object/apply:activitysim.core.config.log_file_path ['activitysim.log']
       mode: w
       formatter: fileFormatter
-      level: NOTSET
+      level: DEBUG
 
     console:
       class: logging.StreamHandler

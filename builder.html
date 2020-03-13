@@ -5599,6 +5599,9 @@ replace_na &lt;- function(x) {
 seed_hh &lt;- pums_hh %&gt;%
   # remove empty households
   filter(NP &gt; 0) %&gt;%
+  filter(WGTP &gt; 0) %&gt;%
+  # remove households from outside the region
+  filter(PUMA %in% crosswalk$PUMA) %&gt;%
   mutate(
     # create unique hh_id field
     hh_id = 1:nrow(.),
@@ -5613,25 +5616,21 @@ seed_hh &lt;- pums_hh %&gt;%
 )
 
 seed_per &lt;- pums_persons %&gt;%
-  # join hhid field
-  left_join(seed_hh %&gt;% select(SERIALNO, hh_id)) %&gt;%
+  # join hhid field, and only keep households we filtered down to.
+  inner_join(seed_hh %&gt;% select(SERIALNO, hh_id, WGTP)) %&gt;%
   # replace NA values with something less stupid
   mutate_at(.vars = vars(PWGTP, AGEP), replace_na)</code></pre>
 <div id="remove-na-fields-from-seed-files" class="section level4">
 <h4>Remove NA fields from seed files</h4>
 <p>Replace NA fields with a negative integer to avoid errors and write to disk.</p>
-<pre class="r"><code>seed_hh %&gt;%
-  mutate_all(replace_na) %&gt;% 
-  write_csv(&quot;data/seed_households.csv&quot;)
+<pre class="r"><code>seed_hh %&gt;% write_csv(&quot;data/seed_households.csv&quot;)
 
-seed_per %&gt;%
-  mutate_all(replace_na) %&gt;% 
-  write_csv(&quot;data/seed_persons.csv&quot;)</code></pre>
+seed_per %&gt;% write_csv(&quot;data/seed_persons.csv&quot;)</code></pre>
 </div>
 </div>
 <div id="meta-controls" class="section level3">
 <h3>Meta Controls</h3>
-<p>PopulationSim requires (we think) at least some region-level controls. We will simply sum up the total households in the controls data to work with this.</p>
+<p>PopulationSim requires (we think) at least some region-level controls. We will simply sum up the total population in the controls data to work with this.</p>
 <pre class="r"><code>(meta &lt;- tract_controls %&gt;%
   summarise(REGION = 1,
             totalPOP = sum(PAGE0) +  sum(PAGE1) +  sum(PAGE2) +  sum(PAGE3) +  sum(PAGE4)))</code></pre>

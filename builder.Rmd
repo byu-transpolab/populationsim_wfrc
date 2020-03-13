@@ -155,9 +155,11 @@ be more appropriate.
 ```{r taz_control}
 tcf <- str_c("inputs/", dir("inputs/"))
 taz_control <- lapply(tcf[grepl("SE_", tcf)], function(csv) {
-  read_csv(csv) %>% select(TAZ = TAZID, HHBASE = TOTHH)
+  read_csv(csv) %>% select(TAZ = TAZID, HHBASE = TOTHH) %>%
+    mutate(HHBASE = ceiling(HHBASE))
 }) %>%
   bind_rows() %>%
+  filter(HHBASE > 0) %>%
   filter(TAZ %in% crosswalk$TAZ)
 write_csv(taz_control, "data/control_totals_taz.csv")
 ```
@@ -357,7 +359,7 @@ seed_per %>% write_csv("data/seed_persons.csv")
 
 ### Meta Controls
 PopulationSim requires (we think) at least some region-level controls. We will
-simply sum up the total households in the controls data to work with this.
+simply sum up the total population in the controls data to work with this.
 
 ```{r meta}
 (meta <- tract_controls %>%
