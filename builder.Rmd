@@ -12,6 +12,7 @@ library(leaflet)
 library(tidyverse)
 library(tigris)
 library(tidycensus)
+options(readr.show_progress = FALSE)
 ```
 
 Constructing a PopulationSim implementation is not a trivial task. In this
@@ -45,7 +46,7 @@ this directly from the Census.
 
 ```{r tracts, message = FALSE}
 tr <- tracts("UT", county = unique(substr(puma_tract$TRACT, 3, 5)), 
-             class = "sf") %>%
+             class = "sf", progress_bar = FALSE) %>%
   st_transform(4326) %>%
   transmute(GEOID) %>%
   left_join(puma_tract, by = c("GEOID" = "TRACT")) %>%
