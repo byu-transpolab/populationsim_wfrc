@@ -26,8 +26,8 @@ we are going to create three levels of controls:
   2. Tract-level: household size and income, and person age
   3. TAZ level: number of households
   
-We are going to build this synthetic population for Provo and Orem, Utah. This
-involves the PUMAs `49002` and `49003`. We can get the census tracts these PUMAs
+We are going to build this synthetic population for Weber, Davis, Salt Lake, and Utah Counties in
+Utah. This involves the ranges of PUMAs shown below. We can get the census tracts these PUMAs
 contain from the Census Bureau's Tract / PUMA lookup file. 
 
 ```{r puma}
@@ -37,7 +37,7 @@ puma_tract <- read_csv(puma_url, col_types = list(PUMA5CE = col_character())) %>
     TRACT = str_c(STATEFP, COUNTYFP, TRACTCE),  
     PUMA = PUMA5CE
   ) %>%
-  filter(PUMA %in% c("49002", "49003"))
+  filter(PUMA %in% c(49001:49004, 11001:11002, 35001:35009, 57001:57002))
 ```
 
 We also want to get the geographic boundaries layer for these tracts. We get
