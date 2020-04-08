@@ -27,46 +27,6 @@ hherror <- tract_sum %>%
 hherror$err <- (tract_sum$num_hh_control - tract_sum$hh_size_1_control - tract_sum$hh_size_2_control
                             - tract_sum$hh_size_3_control - tract_sum$hh_size_4_plus_control)
 
-persons <- read_csv("ouput/synthetic_persons.csv")
-  
-  mutate_at(.vars = vars(COW), replace_na)
-  mutate(
-    #wheelchair_status =  case_when(
-      #wheelchair or non-wheelchair status
-      #w_chair == "07" | w_mtrchr == "08" | w_scootr == "06" ~ T,
-      #TRUE ~ F
-   # ),
-    # for everyone who attained more than highschool still with student status ("01")
-    # apparently no one older than 17 shows schtyp == "01"
-   # university_status = case_when(
-    #  educ == "03" & schtyp == "01" ~ T,
-     # educ == "04" & schtyp == "01" ~ T,
-      #educ == "05" & schtyp == "01" ~ T,
-      #TRUE ~ F
-    #),
-    # This is the important column
-    person_type = case_when(
-      #wheelchair_status == T & worker == "01" ~ "WW",
-      #wheelchair_status == T & worker == "02" ~ "WN",
-      #university_status == T ~ "US",
-      #wkftpt == "01" ~ "FW",
-      #wkftpt == "02" ~ "PW",
-      #prmact == "06" ~ "RT",
-      #r_age >= 18 & worker == "02" ~ "NW", 
-      COW == 01:09 ~ "W",
-      AGEP < 18 & AGEP >= 16 ~ "SD",
-      AGEP < 16 & AGEP >= 5  ~ "SP",
-      r_age < 5 ~ "PS"
-    ),
-    # relevel the factors (default is alphabetical)
-    #person_type = fct_relevel(person_type, 
-                              "FW", "PW", "US", "NW", "RT", 
-                              "SD", "SP", "PS", "WW", "WN"),
-    #person_type = fct_explicit_na(person_type)
-
-```
-
-```{r map}
 #Import tract data
 tr <- tracts("UT", county = unique(substr(puma_tract$TRACT, 3, 5)), 
              class = "sf", progress_bar = FALSE) %>%
@@ -89,42 +49,50 @@ replace_na <- function(x) {
   ifelse(is.na(x),-8,x)
 }
 
-persons <- read_csv("ouput/synthetic_persons.csv")
-  
-  mutate_at(.vars = vars(COW), replace_na)
+people <- read_csv("output/synthetic_persons.csv")
+
+people <- people %>% 
+  mutate_at(.vars = vars(COW, WKHP), replace_na) %>% 
   mutate(
-    #wheelchair_status =  case_when(
-      #wheelchair or non-wheelchair status
-      #w_chair == "07" | w_mtrchr == "08" | w_scootr == "06" ~ T,
-      #TRUE ~ F
-   # ),
-    # for everyone who attained more than highschool still with student status ("01")
-    # apparently no one older than 17 shows schtyp == "01"
-   # university_status = case_when(
-    #  educ == "03" & schtyp == "01" ~ T,
-     # educ == "04" & schtyp == "01" ~ T,
-      #educ == "05" & schtyp == "01" ~ T,
-      T#RUE ~ F
+    DIS_status = case_when(
+      DIS == "1" ~ T,
+      TRUE ~ F
     ),
-    # This is the important column
+    amb_dif_status = case_when(
+      DPHY == "1" ~ T,
+      TRUE ~ F
+    ),
+    PT_hours = case_when(
+      WKHP > 0 & WKHP < 40 ~ T,
+      TRUE ~ F
+    ),
+    FT_hours = case_when(
+      between(WKHP, 40, 99) ~ T,
+      TRUE ~ F
+    ), 
+    worker = case_when(
+      PT_hours == TRUE ~ T,
+      FT_hours == T ~ T,
+      T ~ F
+    ),
+    
     person_type = case_when(
-      #wheelchair_status == T & worker == "01" ~ "WW",
-      #wheelchair_status == T & worker == "02" ~ "WN",
-      #university_status == T ~ "US",
-      #wkftpt == "01" ~ "FW",
-      #wkftpt == "02" ~ "PW",
-      #prmact == "06" ~ "RT",
-      #r_age >= 18 & worker == "02" ~ "NW", 
-      COW == 01:09 ~ "W",
+      DIS_status == T & worker == T ~ "WW",
+      DIS_status == T & worker == F ~ "WN",
+      #Use ambulatory difficulty instead of disability to see which matches better with wheelchair population
+      amb_dif_status == T & worker == T ~ "ADW",
+      amb_dif_status == T & worker == F ~ "ADN",
+      FT_hours == T ~ "FW",
+      PT_hours == T ~ "PW",
+      COW == "9" & AGEP >= 50 ~ "RT", 
+      worker == F & AGEP >= 18 ~ "NW",
       AGEP < 18 & AGEP >= 16 ~ "SD",
       AGEP < 16 & AGEP >= 5  ~ "SP",
-      r_age < 5 ~ "PS"
+      AGEP >= 0 & AGEP < 5 ~ "PS"
     ),
-    # relevel the factors (default is alphabetical)
-    #person_type = fct_relevel(person_type, 
-                              "FW", "PW", "US", "NW", "RT", 
-                              "SD", "SP", "PS", "WW", "WN"),
-    #person_type = fct_explicit_na(person_type)
+    person_type = fct_relevel(person_type, 
+                              "FW", "PW", "NW", "RT", 
+                              "SD", "SP", "PS", "WW", "WN", "ADW", "ADN")
+  )
 
 ```
-
