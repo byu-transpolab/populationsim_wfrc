@@ -12,6 +12,7 @@ library(leaflet)
 library(tidyverse)
 library(tigris)
 library(tidycensus)
+library(memisc)
 options(readr.show_progress = FALSE)
 ```
 
@@ -52,22 +53,18 @@ replace_na <- function(x) {
 people <- read_csv("output/synthetic_persons.csv")
 
 people <- people %>% 
-  mutate_at(.vars = vars(COW, WKHP), replace_na) %>% 
+  mutate_at(.vars = vars(COW, WKHP, DDRS, DIS), replace_na) %>% 
   mutate(
     DIS_status = case_when(
-      DIS == "1" ~ T,
-      TRUE ~ F
-    ),
-    amb_dif_status = case_when(
-      DPHY == "1" ~ T,
+      DDRS == "1" ~ T,
       TRUE ~ F
     ),
     PT_hours = case_when(
-      WKHP > 0 & WKHP < 40 ~ T,
+      WKHP > 0 & WKHP < 30 ~ T,
       TRUE ~ F
     ),
     FT_hours = case_when(
-      between(WKHP, 40, 99) ~ T,
+      between(WKHP, 30, 99) ~ T,
       TRUE ~ F
     ), 
     worker = case_when(
@@ -79,20 +76,19 @@ people <- people %>%
     person_type = case_when(
       DIS_status == T & worker == T ~ "WW",
       DIS_status == T & worker == F ~ "WN",
-      #Use ambulatory difficulty instead of disability to see which matches better with wheelchair population
-      amb_dif_status == T & worker == T ~ "ADW",
-      amb_dif_status == T & worker == F ~ "ADN",
       FT_hours == T ~ "FW",
       PT_hours == T ~ "PW",
       COW == "9" & AGEP >= 50 ~ "RT", 
       worker == F & AGEP >= 18 ~ "NW",
       AGEP < 18 & AGEP >= 16 ~ "SD",
       AGEP < 16 & AGEP >= 5  ~ "SP",
-      AGEP >= 0 & AGEP < 5 ~ "PS"
+      AGEP >= 0 & AGEP < 5 ~ "PS",
+      T ~ "NONE"
     ),
     person_type = fct_relevel(person_type, 
                               "FW", "PW", "NW", "RT", 
-                              "SD", "SP", "PS", "WW", "WN", "ADW", "ADN")
+                              "SD", "SP", "PS", "WW", "WN", "NONE")
   )
 
+summary(people$person_type)
 ```
