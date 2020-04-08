@@ -100,7 +100,7 @@ output_synthetic_population:
   households:
     filename: synthetic_households.csv
     columns:
-      #- NP
+      - NP
       #- AGEHOH
       - HHINCADJ
       #- NWESR
@@ -126,6 +126,8 @@ output_synthetic_population:
       - INDP
       - OCCP
       - FDPHYP
+      - COW
+      - WKHP
       
 
 

@@ -1,0 +1,130 @@
+---
+title: "Popsim Validation"
+author: "Christian Hunter"
+date: "4/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+library(sf)
+library(leaflet)
+library(tidyverse)
+library(tigris)
+library(tidycensus)
+options(readr.show_progress = FALSE)
+```
+
+## Error Map
+
+The synthetic population created using PopultionSim and the WFRC model has a slight discrepancy between in the household controls at the tract level. The controls for total households are at the TAZ level while the controls for household size (1 person, 2 people, etc.) are at the census tract level. During the creation of the synthetic population, PopulationSim creates a total household control at the tract level that is greater than the sum of the individual household size controls. To see if there was any geographic trend in this error, a map of the difference between these two values was created.
+
+
+```{r hh_error}
+tract_sum <- read_csv("output/summary_TRACT.csv")
+hherror <- tract_sum %>% 
+  select(1:7)
+hherror$err <- (tract_sum$num_hh_control - tract_sum$hh_size_1_control - tract_sum$hh_size_2_control
+                            - tract_sum$hh_size_3_control - tract_sum$hh_size_4_plus_control)
+
+persons <- read_csv("ouput/synthetic_persons.csv")
+  
+  mutate_at(.vars = vars(COW), replace_na)
+  mutate(
+    #wheelchair_status =  case_when(
+      #wheelchair or non-wheelchair status
+      #w_chair == "07" | w_mtrchr == "08" | w_scootr == "06" ~ T,
+      #TRUE ~ F
+   # ),
+    # for everyone who attained more than highschool still with student status ("01")
+    # apparently no one older than 17 shows schtyp == "01"
+   # university_status = case_when(
+    #  educ == "03" & schtyp == "01" ~ T,
+     # educ == "04" & schtyp == "01" ~ T,
+      #educ == "05" & schtyp == "01" ~ T,
+      #TRUE ~ F
+    #),
+    # This is the important column
+    person_type = case_when(
+      #wheelchair_status == T & worker == "01" ~ "WW",
+      #wheelchair_status == T & worker == "02" ~ "WN",
+      #university_status == T ~ "US",
+      #wkftpt == "01" ~ "FW",
+      #wkftpt == "02" ~ "PW",
+      #prmact == "06" ~ "RT",
+      #r_age >= 18 & worker == "02" ~ "NW", 
+      COW == 01:09 ~ "W",
+      AGEP < 18 & AGEP >= 16 ~ "SD",
+      AGEP < 16 & AGEP >= 5  ~ "SP",
+      r_age < 5 ~ "PS"
+    ),
+    # relevel the factors (default is alphabetical)
+    #person_type = fct_relevel(person_type, 
+                              "FW", "PW", "US", "NW", "RT", 
+                              "SD", "SP", "PS", "WW", "WN"),
+    #person_type = fct_explicit_na(person_type)
+
+```
+
+```{r map}
+#Import tract data
+tr <- tracts("UT", county = unique(substr(puma_tract$TRACT, 3, 5)), 
+             class = "sf", progress_bar = FALSE) %>%
+  st_transform(4326)
+
+tr$GEOID <- as.numeric(as.character(tr$GEOID))  
+  
+tr <- tr %>% 
+  left_join(hherror, by = c("GEOID" = "id"))
+
+#Map
+st_write(tr, "validation/error.shp")
+```
+
+## Person Categories
+Compare the population breakdown to the NHTS data
+
+```{r}
+replace_na <- function(x) {
+  ifelse(is.na(x),-8,x)
+}
+
+persons <- read_csv("ouput/synthetic_persons.csv")
+  
+  mutate_at(.vars = vars(COW), replace_na)
+  mutate(
+    #wheelchair_status =  case_when(
+      #wheelchair or non-wheelchair status
+      #w_chair == "07" | w_mtrchr == "08" | w_scootr == "06" ~ T,
+      #TRUE ~ F
+   # ),
+    # for everyone who attained more than highschool still with student status ("01")
+    # apparently no one older than 17 shows schtyp == "01"
+   # university_status = case_when(
+    #  educ == "03" & schtyp == "01" ~ T,
+     # educ == "04" & schtyp == "01" ~ T,
+      #educ == "05" & schtyp == "01" ~ T,
+      T#RUE ~ F
+    ),
+    # This is the important column
+    person_type = case_when(
+      #wheelchair_status == T & worker == "01" ~ "WW",
+      #wheelchair_status == T & worker == "02" ~ "WN",
+      #university_status == T ~ "US",
+      #wkftpt == "01" ~ "FW",
+      #wkftpt == "02" ~ "PW",
+      #prmact == "06" ~ "RT",
+      #r_age >= 18 & worker == "02" ~ "NW", 
+      COW == 01:09 ~ "W",
+      AGEP < 18 & AGEP >= 16 ~ "SD",
+      AGEP < 16 & AGEP >= 5  ~ "SP",
+      r_age < 5 ~ "PS"
+    ),
+    # relevel the factors (default is alphabetical)
+    #person_type = fct_relevel(person_type, 
+                              "FW", "PW", "US", "NW", "RT", 
+                              "SD", "SP", "PS", "WW", "WN"),
+    #person_type = fct_explicit_na(person_type)
+
+```
+
