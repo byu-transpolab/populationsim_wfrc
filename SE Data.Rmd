@@ -5,8 +5,17 @@ date: "5/14/2020"
 output: html_document
 ---
 
+```{r, message=FALSE, warning=FALSE}
+library(rmarkdown)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(knitr)
+
+```
+
 ## Introduction
-The ActivitySim Model requires an input of specific socioeconomic (SE) data on certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
+The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
 
 The socioeconomic file needs 42 different inputs that can be described as different column headings. The headings are the following:  
 
@@ -15,9 +24,62 @@ The socioeconomic file needs 42 different inputs that can be described as differ
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
 ***
+### ZONE
+The Zone data is a list of all the TAZs. This list is copied from the 2018 SE data from WFRC. <!-- Should I put this file somewhere in populationsim_wfrc? That way I can access it? Maybe inputs folder? The 2020 one is there. For now its in the inputs folder on my computer.--> A lot of other data come from this file as well.
+```{r, layout = "1-body-outset", message=FALSE, warning=FALSE}
+#create a variable to hold the wfrc data
+SEWF18 <- read.csv("inputs/SE_WF_2018.csv")
+paged_table(SEWF18)
 
-### Zone
-The Zone data is a list of all the TAZs. This list is copied from the 
+#create a variable to hold the Zone column
+Zone <- SEWF18 %>%
+  select(X.TAZID)
+colnames(Zone)[1] <- "TAZ"
+```
 
+***
+### DISTRICT, SD, and COUNTY
+The District and County information is determined by the PUMA. The following table shows this relationship. 
+```{r}
+dckey = read.csv("inputs/other/DC_Key.csv")
+paged_table(dckey)
+```
+
+The synthetic population data shows the PUMA of each specific TAZ. 
+```{r}
+exhouse = read.csv("inputs/synpop/expanded_household_ids.csv")
+
+#create a table of PUMA and TAZ from the exhouse variable
+d1 = exhouse %>%
+  group_by(PUMA, TAZ) %>%
+  summarize_all("sum") %>%
+  arrange(TAZ) %>%
+  select(PUMA,TAZ)
+
+#create a table holding the District, SD, and County info, sorted by their TAZ
+d2 <- (merge(d1, dckey, by = "PUMA"))
+DSC = d2 %>%
+  mutate(SD = DISTRICT)%>%
+  select(TAZ, DISTRICT, SD, COUNTY)
+```
+
+***
+### TOTHH 
+
+
+
+
+
+
+
+
+***
+## Final Table
+The final table is the combination of all 46 column headers, organized primarily by the socioeconomic data from the WFRC 2018 file. This table will be used as an input for the ActivitySim model. 
+```{r}
+#create a table holding all 46 column values needed, organized primarily by the socioeconomic data from WFRC
+FullTable <- merge(Zone, DSC, by = 'TAZ',all = TRUE)
+paged_table(FullTable)
+```
 
 
