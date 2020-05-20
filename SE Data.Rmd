@@ -10,10 +10,10 @@ library(rmarkdown)
 library(tidyverse)
 library(plyr)
 library(dplyr)
-library(knitr)
-
 ```
 
+
+***
 ## Introduction
 The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
 
@@ -23,63 +23,125 @@ The socioeconomic file needs 42 different inputs that can be described as differ
 
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
+Also, in order to put together all 46 columns of input data, the data must be collected from various sources.
+
+```{r}
+#wfrc data
+SEWF18 <- read.csv("inputs/SE_WF_2018.csv")
+  colnames(SEWF18)[1] <- "ZONE"
+  
+#synpop expanded household ids
+exhouse = read.csv("inputs/synpop/expanded_household_ids.csv")
+  colnames(exhouse)[3] <- "ZONE"
+  
+#synpop household data
+hsyn = read.csv("inputs/synpop/synthetic_households.csv")
+  colnames(hsyn)[4] <- "ZONE"
+
+```
+
+
 ***
 ### ZONE
 The Zone data is a list of all the TAZs. This list is copied from the 2018 SE data from WFRC. <!-- Should I put this file somewhere in populationsim_wfrc? That way I can access it? Maybe inputs folder? The 2020 one is there. For now its in the inputs folder on my computer.--> A lot of other data come from this file as well.
-```{r, layout = "1-body-outset", message=FALSE, warning=FALSE}
-#create a variable to hold the wfrc data
-SEWF18 <- read.csv("inputs/SE_WF_2018.csv")
-paged_table(SEWF18)
 
-#create a variable to hold the Zone column
-Zone <- SEWF18 %>%
-  select(X.TAZID)
-colnames(Zone)[1] <- "TAZ"
+```{r, layout = "1-body-outset", message=FALSE, warning=FALSE}
+#create a variable to hold the TAZ/Zone column
+TAZ <- SEWF18 %>%
+  select(ZONE)
 ```
 
+
 ***
-### DISTRICT, SD, and COUNTY
+### DISTRICT, SD, COUNTY
 The District and County information is determined by the PUMA. The following table shows this relationship. 
+
 ```{r}
+#display the district/county key
 dckey = read.csv("inputs/other/DC_Key.csv")
 paged_table(dckey)
 ```
 
-The synthetic population data shows the PUMA of each specific TAZ. 
+The synthetic population data shows the PUMA of each specific ZONE. 
+
 ```{r}
-exhouse = read.csv("inputs/synpop/expanded_household_ids.csv")
-
-#create a table of PUMA and TAZ from the exhouse variable
+#create a table of PUMA and ZONE from the exhouse variable
 d1 = exhouse %>%
-  group_by(PUMA, TAZ) %>%
+  group_by(PUMA, ZONE) %>%
   summarize_all("sum") %>%
-  arrange(TAZ) %>%
-  select(PUMA,TAZ)
+  arrange(ZONE) %>%
+  select(PUMA,ZONE)
 
-#create a table holding the District, SD, and County info, sorted by their TAZ
+#create a table holding the District, SD, and County info, sorted by their ZONE
 d2 <- (merge(d1, dckey, by = "PUMA"))
 DSC = d2 %>%
   mutate(SD = DISTRICT)%>%
-  select(TAZ, DISTRICT, SD, COUNTY)
+  select(ZONE, DISTRICT, SD, COUNTY)
+
+#update full table
+FullTable <- merge(TAZ, DSC, by = "ZONE", all = TRUE)
 ```
 
+
 ***
-### TOTHH 
+### TOTHH, HHPOP, TOTPOP
+The total household (TOTHH) and total population (TOTPOP) data comes from the 2018 WFRC SE data. Household population (HHPOP) is a funciton of household size (HHSIZE) which is also found in the same data set. 
+
+```{r}
+#create a table of the household and total population data from the wfrc data
+HH <- SEWF18 %>%
+  mutate(HHPOP = TOTHH * HHSIZE) %>%
+  select(ZONE, TOTHH, HHPOP, TOTPOP)
+
+#update full table
+FullTable <- merge(FullTable, HH, by = 'ZONE', all = TRUE)
+```
 
 
+***
+### EMPRES
 
 
+***
+### SFDU, MFDU
 
+
+***
+### HHINCQ1,	HHINCQ2,	HHINCQ3,	HHINCQ4
+The income data is separated into 4 variables, each representing a different range of household income per year. This data is extracted from the 
+
+```{r}
+#create a table with columns representing the household income for each category
+#assign the value of 1 if the criteria for the column is met
+HouseIncome <- hsyn %>%
+  mutate(
+    inc = HHINCADJ/(10^6),
+    money = ifelse(inc < 30000, 1, ifelse(inc >= 30000 & inc < 60000, 2, 
+            ifelse(inc >= 60000 & inc < 100000, 3, 4))),
+    HHINCQ1 = ifelse(money == 1, 1, 0),
+    HHINCQ2 = ifelse(money == 2, 1, 0),
+    HHINCQ3 = ifelse(money == 3, 1, 0),
+    HHINCQ4 = ifelse(money == 4, 1, 0)
+   ) %>%
+  select(ZONE, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4) %>%
+  
+  #group the data by ZONE and sum all the values to get the total counts for each ZONE
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
+#paged_table(FullTable)
+```
 
 
 
 ***
 ## Final Table
 The final table is the combination of all 46 column headers, organized primarily by the socioeconomic data from the WFRC 2018 file. This table will be used as an input for the ActivitySim model. 
+
 ```{r}
 #create a table holding all 46 column values needed, organized primarily by the socioeconomic data from WFRC
-FullTable <- merge(Zone, DSC, by = 'TAZ',all = TRUE)
-paged_table(FullTable)
+#FullTable <- merge(FullTable, "final column", by = 'ZONE', all = TRUE)
+#paged_table(FullTable)
 ```
-
-
