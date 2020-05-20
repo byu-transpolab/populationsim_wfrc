@@ -108,7 +108,7 @@ FullTable <- merge(FullTable, HH, by = 'ZONE', all = TRUE)
 
 ***
 ### HHINCQ1,	HHINCQ2,	HHINCQ3,	HHINCQ4
-The income data is separated into 4 variables, each representing a different range of household income per year. This data is extracted from the 
+The income data is separated into 4 variables, each representing a different range of household income per year. This data is extracted from the synthetic population household data. That houehold data shows income to a factor of 10^6, so that is taken into account.  
 
 ```{r}
 #create a table with columns representing the household income for each category
@@ -131,8 +131,38 @@ HouseIncome <- hsyn %>%
 
 #update full table
 FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
-#paged_table(FullTable)
 ```
+
+***
+## TOTACRE,	RESACRE,	CIACRE
+
+
+***
+## SHPOP62+
+
+
+***
+## TOTEMP
+The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 WFRC Data. 
+
+```{r}
+#create a variable to hold the Total employment column
+Temp <- SEWF18 %>%
+  select(ZONE, ALLEMP)
+
+#update full table
+FullTable <- merge(FullTable, Temp, by = 'ZONE', all = TRUE)
+paged_table(FullTable)
+```
+
+
+***
+## AGES: AGE0004,	AGE0519,	AGE2044,	AGE4564,	AGE65P
+
+
+***
+## EMPLOYMENT: RETEMPN	FPSEMPN	HEREMPN	OTHEMPN	AGREMPN	MWTEMPN
+
 
 
 
