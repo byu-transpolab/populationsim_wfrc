@@ -37,6 +37,10 @@ exhouse = read.csv("inputs/synpop/expanded_household_ids.csv")
 #synpop household data
 hsyn = read.csv("inputs/synpop/synthetic_households.csv")
   colnames(hsyn)[4] <- "ZONE"
+  
+#synpop population data
+psyn = read.csv("inputs/synpop/synthetic_persons.csv")
+  colnames(psyn)[3] <- "ZONE"
 
 ```
 
@@ -134,34 +138,75 @@ FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 ```
 
 ***
-## TOTACRE,	RESACRE,	CIACRE
+### TOTACRE,	RESACRE,	CIACRE
 
 
 ***
-## SHPOP62+
-
-
-***
-## TOTEMP
+### TOTEMP
 The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 WFRC Data. 
 
 ```{r}
 #create a variable to hold the Total employment column
 Temp <- SEWF18 %>%
   select(ZONE, ALLEMP)
-
-#update full table
-FullTable <- merge(FullTable, Temp, by = 'ZONE', all = TRUE)
-paged_table(FullTable)
 ```
 
 
 ***
-## AGES: AGE0004,	AGE0519,	AGE2044,	AGE4564,	AGE65P
+### AGES: AGE0004,	AGE0519,	AGE2044,	AGE4564,	AGE65P
+The data for the age grouping columns are determined from the persons/population table within the synthetic population data. 
+
+```{r}
+#create a table that has 5 columns that store the value of 1 for the matched age criteria
+AgeGroups <- psyn %>%
+  mutate(
+    AGE = ifelse(AGEP %in% 0:4, 1, ifelse(AGEP %in% 5:19,2,
+          ifelse(AGEP %in% 20:44, 3, ifelse(AGEP %in% 45:64, 4, 5)))),
+    AGE2 = ifelse(AGEP >= 62, 1, 0),
+    AGE0004 = ifelse(AGE == 1, 1,0),
+    AGE0519 = ifelse(AGE == 2, 1,0),
+    AGE2044 = ifelse(AGE == 3, 1,0),
+    AGE4564 = ifelse(AGE == 4, 1,0),
+    AGE65P = ifelse(AGE == 5, 1,0),
+    AGE62P = ifelse(AGE2 == 1, 1,0)
+  )
+ 
+#select the write columns, group the data by Zone, and sum all the values to get the total counts for each Zone
+ages <- AgeGroups %>% 
+  select(ZONE, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P, AGE62P) %>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#create a table for certain age groups
+age1 <- ages %>%
+  select(ZONE, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P)
+```
 
 
 ***
-## EMPLOYMENT: RETEMPN	FPSEMPN	HEREMPN	OTHEMPN	AGREMPN	MWTEMPN
+### SHPOP62+
+The SHPOP62P category is determined from the persons data as well. It takes into account the total population, which is determined by the sum of all the age groups instead of by the TOTPOP field. 
+```{r}
+#create a table for the 62+ age group info
+age2 <- ages %>%
+  mutate(
+    SHPOP62P = AGE62P/(AGE0004+AGE0519+AGE2044+AGE4564+AGE65P)
+  )%>%
+  select(ZONE, SHPOP62P)
+```
+
+
+```{r}
+#update full table in the correct table order
+FullTable <- merge(FullTable, age2, by = 'ZONE', all = TRUE)
+FullTable <- merge(FullTable, Temp, by = 'ZONE', all = TRUE)
+FullTable <- merge(FullTable, age1, by = 'ZONE', all = TRUE)
+#paged_table(FullTable)
+```
+
+
+***
+### EMPLOYMENT: RETEMPN	FPSEMPN	HEREMPN	OTHEMPN	AGREMPN	MWTEMPN
 
 
 
