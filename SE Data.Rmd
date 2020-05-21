@@ -26,23 +26,22 @@ The describtion for each column heading can be found at this link: https://githu
 
 Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, <!-- other files here-->. 
 
-```{r}
+```{r, message=FALSE}
 #wfrc data
-SEWF18 <- read.csv("inputs/SE_WF_2018.csv")
+SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[1] <- "ZONE"
   
 #synpop expanded household ids
-exhouse = read.csv("inputs/synpop/expanded_household_ids.csv")
+exhouse = read_csv("inputs/synpop/expanded_household_ids.csv")
   colnames(exhouse)[3] <- "ZONE"
   
 #synpop household data
-hsyn = read.csv("inputs/synpop/synthetic_households.csv")
+hsyn = read_csv("inputs/synpop/synthetic_households.csv")
   colnames(hsyn)[4] <- "ZONE"
   
 #synpop population/persons data
-psyn = read.csv("inputs/synpop/synthetic_persons.csv")
+psyn = read_csv("inputs/synpop/synthetic_persons.csv")
   colnames(psyn)[3] <- "ZONE"
-
 ```
 
 
@@ -61,9 +60,9 @@ TAZ <- SEWF18 %>%
 ### DISTRICT, SD, COUNTY
 The District and County information is determined by the PUMA. The following table shows this relationship. 
 
-```{r}
+```{r, message=FALSE}
 #display the district/county key that I made up
-dckey = read.csv("inputs/other/DC_Key.csv")
+dckey = read_csv("inputs/other/DC_Key.csv")
 paged_table(dckey)
 ```
 
@@ -105,6 +104,21 @@ FullTable <- merge(FullTable, HH, by = 'ZONE', all = TRUE)
 
 ***
 ### EMPRES
+The number of employed residents is determined by the data in the synthetic population persons file. If the COW (class of worker) categoty isn't empty, the person is assumed to be employed. 
+
+```{r}
+#create a table that determines the number of employed residents in each ZONE
+workerbee <- psyn %>%
+  mutate(
+    EMPRES = ifelse(COW %in% 1:9, 1, 0)
+  ) %>%
+  select(ZONE, EMPRES) %>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- merge(FullTable, workerbee, by = 'ZONE', all = TRUE)
+```
 
 
 ***
@@ -209,9 +223,9 @@ FullTable <- merge(FullTable, age1, by = 'ZONE', all = TRUE)
 ### EMPLOYMENT: RETEMPN,	FPSEMPN,	HEREMPN,	OTHEMPN,	AGREMPN,	MWTEMPN
 The employment data comes from using the 2018 SE WFRC data file. It is not a direct copy of the columns. To relate the columns, we need to understand the meaning of the employment columns from WFRC. The meaning of the headings are shown below: 
 
-```{r}
+```{r, message=FALSE}
 #display the employment key from wfrc
-empkey = read.csv("inputs/other/EMP_Key.csv")
+empkey = read_csv("inputs/other/EMP_Key.csv")
 kable(empkey)
 ```
 
