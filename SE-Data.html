@@ -1651,7 +1651,7 @@ library(knitr)</code></pre>
 <p>The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.</p>
 <p>The socioeconomic file requires 42 different inputs which can be described as different column headings. These headings are copied directly from the ActivitySim Example’s input file. The headings are the following:</p>
 <blockquote>
-<h5 id="zone-district-sd-county-tothh-hhpop-totpop-empres-sfdu-mfdu-hhincq1-hhincq2-hhincq3-hhincq4-totacre-resacre-ciacre-shpop62p-totemp-age0004-age-0519-age2044-age4564-age65p-retempn-fpsempn-herempn-othempn-agrempn-mwtempn-prkcst-oprkcst-area_type-hsenroll-collfte-collpte-topology-terminal-zero-hhlds-sftaz-gqpop">ZONE, DISTRICT, SD, COUNTY, TOTHH, HHPOP, TOTPOP, EMPRES, SFDU, MFDU, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4, TOTACRE, RESACRE, CIACRE, SHPOP62P, TOTEMP, AGE0004, AGE 0519, AGE2044, AGE4564, AGE65P, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN, PRKCST, OPRKCST, area_type, HSENROLL, COLLFTE, COLLPTE, TOPOLOGY, TERMINAL, ZERO, hhlds, sftaz, gqpop</h5>
+<h5 id="zone-district-sd-county-tothh-hhpop-totpop-empres-sfdu-mfdu-hhincq1-hhincq2-hhincq3-hhincq4-totacre-resacre-ciacre-shpop62p-totemp-age0004-age0519-age2044-age4564-age65p-retempn-fpsempn-herempn-othempn-agrempn-mwtempn-prkcst-oprkcst-area_type-hsenroll-collfte-collpte-topology-terminal-zero-hhlds-sftaz-gqpop">ZONE, DISTRICT, SD, COUNTY, TOTHH, HHPOP, TOTPOP, EMPRES, SFDU, MFDU, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4, TOTACRE, RESACRE, CIACRE, SHPOP62P, TOTEMP, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN, PRKCST, OPRKCST, area_type, HSENROLL, COLLFTE, COLLPTE, TOPOLOGY, TERMINAL, ZERO, hhlds, sftaz, gqpop</h5>
 </blockquote>
 <p>The describtion for each column heading can be found at this link: <a href="https://github.com/BayAreaMetro/modeling-website/wiki/TazData" class="uri">https://github.com/BayAreaMetro/modeling-website/wiki/TazData</a></p>
 <p>Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, <!-- other files here-->.</p>
@@ -1939,7 +1939,7 @@ Other &lt;- SEWF18 %&gt;%
 <div id="final-table" class="section level2">
 <h2>Final Table</h2>
 <p>The final table is the combination of all 42 column headers, organized primarily by the socioeconomic data from the 2018 WFRC file. This table will be used as one of the primary inputs for the ActivitySim model.</p>
-<pre class="r"><code>#create a table holding all 46 column values needed, organized primarily by the socioeconomic data from WFRC
+<pre class="r"><code>#create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
 FullTable &lt;- merge(FullTable, Other, by = &#39;ZONE&#39;, all = TRUE)
 paged_table(FullTable)</code></pre>
 <div data-pagedtable="false">
