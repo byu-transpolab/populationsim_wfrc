@@ -10,6 +10,7 @@ library(rmarkdown)
 library(tidyverse)
 library(plyr)
 library(dplyr)
+library(knitr)
 ```
 
 
@@ -17,13 +18,13 @@ library(dplyr)
 ## Introduction
 The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
 
-The socioeconomic file needs 42 different inputs that can be described as different column headings. The headings are the following:  
+The socioeconomic file requires 42 different inputs which can be described as different column headings. These headings are copied directly from the ActivitySim Example's input file. The headings are the following:  
 
-> ##### ZONE, DISTRICT, SD, COUNTY, TOTHH, HHPOP, TOTPOP, EMPRES, SFDU, MFDU, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4, TOTACRE, RESACRE, CIACRE, SHPOP62P, TOTEMP, AGE0004, AGE2044, AGE4564, AGE65P, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN, PRKCST, OPRKCST, area_type, HSENROLL, COLLFTE, COLLPTE, TOPOLOGY, TERMINAL, ZERO, hhlds, sftaz, gqpop
+> ##### ZONE, DISTRICT, SD, COUNTY, TOTHH, HHPOP, TOTPOP, EMPRES, SFDU, MFDU, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4, TOTACRE, RESACRE, CIACRE, SHPOP62P, TOTEMP, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN, PRKCST, OPRKCST, area_type, HSENROLL, COLLFTE, COLLPTE, TOPOLOGY, TERMINAL, ZERO, hhlds, sftaz, gqpop
 
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
-Also, in order to put together all 46 columns of input data, the data must be collected from various sources.
+Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, <!-- other files here-->. 
 
 ```{r}
 #wfrc data
@@ -38,7 +39,7 @@ exhouse = read.csv("inputs/synpop/expanded_household_ids.csv")
 hsyn = read.csv("inputs/synpop/synthetic_households.csv")
   colnames(hsyn)[4] <- "ZONE"
   
-#synpop population data
+#synpop population/persons data
 psyn = read.csv("inputs/synpop/synthetic_persons.csv")
   colnames(psyn)[3] <- "ZONE"
 
@@ -47,7 +48,7 @@ psyn = read.csv("inputs/synpop/synthetic_persons.csv")
 
 ***
 ### ZONE
-The Zone data is a list of all the TAZs. This list is copied from the 2018 SE data from WFRC. <!-- Should I put this file somewhere in populationsim_wfrc? That way I can access it? Maybe inputs folder? The 2020 one is there. For now its in the inputs folder on my computer.--> A lot of other data come from this file as well.
+The Zone data is a list of all the TAZs. This list is copied from the 2018 SE data from WFRC. A lot of other data comes from this file as well.
 
 ```{r, layout = "1-body-outset", message=FALSE, warning=FALSE}
 #create a variable to hold the TAZ/Zone column
@@ -61,12 +62,12 @@ TAZ <- SEWF18 %>%
 The District and County information is determined by the PUMA. The following table shows this relationship. 
 
 ```{r}
-#display the district/county key
+#display the district/county key that I made up
 dckey = read.csv("inputs/other/DC_Key.csv")
 paged_table(dckey)
 ```
 
-The synthetic population data shows the PUMA of each specific ZONE. 
+The synthetic population data shows the PUMA of each specific zone. Using this data, and the key above, the districts and counties are determined.  
 
 ```{r}
 #create a table of PUMA and ZONE from the exhouse variable
@@ -89,7 +90,7 @@ FullTable <- merge(TAZ, DSC, by = "ZONE", all = TRUE)
 
 ***
 ### TOTHH, HHPOP, TOTPOP
-The total household (TOTHH) and total population (TOTPOP) data comes from the 2018 WFRC SE data. Household population (HHPOP) is a funciton of household size (HHSIZE) which is also found in the same data set. 
+The total household (TOTHH) and total population (TOTPOP) data comes from the 2018 SE WFRC data. Household population (HHPOP) is a funciton of household size (HHSIZE) which is also found in the same data set. 
 
 ```{r}
 #create a table of the household and total population data from the wfrc data
@@ -111,8 +112,8 @@ FullTable <- merge(FullTable, HH, by = 'ZONE', all = TRUE)
 
 
 ***
-### HHINCQ1,	HHINCQ2,	HHINCQ3,	HHINCQ4
-The income data is separated into 4 variables, each representing a different range of household income per year. This data is extracted from the synthetic population household data. That houehold data shows income to a factor of 10^6, so that is taken into account.  
+### Income: HHINCQ1,	HHINCQ2,	HHINCQ3,	HHINCQ4
+The income data is separated into 4 variables, each representing a different range of household income per year. This data is extracted from the synthetic population household data. That household data shows income to the factor of 10^6, so that is taken into account.  
 
 ```{r}
 #create a table with columns representing the household income for each category
@@ -143,7 +144,7 @@ FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 
 ***
 ### TOTEMP
-The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 WFRC Data. 
+The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 SE WFRC Data. 
 
 ```{r}
 #create a variable to hold the Total employment column
@@ -171,7 +172,7 @@ AgeGroups <- psyn %>%
     AGE62P = ifelse(AGE2 == 1, 1,0)
   )
  
-#select the write columns, group the data by Zone, and sum all the values to get the total counts for each Zone
+#select the right columns, group the data by Zone, and sum all the values to get the total counts for each Zone
 ages <- AgeGroups %>% 
   select(ZONE, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P, AGE62P) %>%
   group_by(ZONE) %>%
@@ -185,9 +186,9 @@ age1 <- ages %>%
 
 ***
 ### SHPOP62+
-The SHPOP62P category is determined from the persons data as well. It takes into account the total population, which is determined by the sum of all the age groups instead of by the TOTPOP field. 
+The SHPOP62P category is determined from the sythetic popoulation persons data as well. It takes into account the total population, which is determined by summing up all of the age groups instead of using the TOTPOP field. 
 ```{r}
-#create a table for the 62+ age group info
+#create a table for the 62+ age group data
 age2 <- ages %>%
   mutate(
     SHPOP62P = AGE62P/(AGE0004+AGE0519+AGE2044+AGE4564+AGE65P)
@@ -201,22 +202,97 @@ age2 <- ages %>%
 FullTable <- merge(FullTable, age2, by = 'ZONE', all = TRUE)
 FullTable <- merge(FullTable, Temp, by = 'ZONE', all = TRUE)
 FullTable <- merge(FullTable, age1, by = 'ZONE', all = TRUE)
-#paged_table(FullTable)
 ```
 
 
 ***
-### EMPLOYMENT: RETEMPN	FPSEMPN	HEREMPN	OTHEMPN	AGREMPN	MWTEMPN
+### EMPLOYMENT: RETEMPN,	FPSEMPN,	HEREMPN,	OTHEMPN,	AGREMPN,	MWTEMPN
+The employment data comes from using the 2018 SE WFRC data file. It is not a direct copy of the columns. To relate the columns, we need to understand the meaning of the employment columns from WFRC. The meaning of the headings are shown below: 
+
+```{r}
+#display the employment key from wfrc
+empkey = read.csv("inputs/other/EMP_Key.csv")
+kable(empkey)
+```
+
+The code explains how the required employment data is calculated. (Note: construction is assumed to be a professional service in the calculation).
+
+```{r}
+#create a table with new employment columns, based on the WFRC ones
+#select the ones we want to use
+Employment <- SEWF18 %>%
+  mutate(
+    RETEMPN = RETL + FOOD,
+    FRSEMPN = OFFI + FM_CONS,
+    HEREMPN = HLTH + GVED,
+    OTHEMPN = OTHR + HBJ,
+    AGREMPN = FM_AGRI + FM_MING,
+    MWTEMPN = MANU + WSLE
+  ) %>%
+  select(ZONE, RETEMPN, FRSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN)
+
+#update full table
+FullTable <- merge(FullTable, Employment, by = 'ZONE', all = TRUE)
+```
 
 
+***
+### PRKCST, OPRKCST
+
+
+***
+### area_type
+
+
+***
+### HSENROLL
+The highschool enrollment data is copied from the 2018 SE WFRC data. 
+
+```{r}
+#create a variable to hold the high school column
+HS <- SEWF18 %>%
+  select(ZONE, Enrol_High)
+
+#update full table
+FullTable <- merge(FullTable, HS, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### COLLFTE, COLLPTE
+
+
+***
+### TOPOLOGY
+
+
+***
+### TERMINAL
+
+
+***
+### Other: ZERO, hhlds, sftaz, gqpop
+The last columns needed for the input columns are either repeats or easy to calculate.
+
+```{r}
+#create a table to hold the remaining columns after calculating them
+Other <- SEWF18 %>%
+  mutate(
+    ZERO = 0,
+    hhlds = TOTHH,
+    sftaz = ZONE,
+    gqpop = TOTPOP - (TOTHH * HHSIZE)
+  ) %>%
+  select(ZONE, ZERO, hhlds, sftaz, gqpop)
+```
 
 
 ***
 ## Final Table
-The final table is the combination of all 46 column headers, organized primarily by the socioeconomic data from the WFRC 2018 file. This table will be used as an input for the ActivitySim model. 
+The final table is the combination of all 42 column headers, organized primarily by the socioeconomic data from the 2018 WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
 
 ```{r}
-#create a table holding all 46 column values needed, organized primarily by the socioeconomic data from WFRC
-#FullTable <- merge(FullTable, "final column", by = 'ZONE', all = TRUE)
-#paged_table(FullTable)
+#create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
+FullTable <- merge(FullTable, Other, by = 'ZONE', all = TRUE)
+paged_table(FullTable)
 ```
