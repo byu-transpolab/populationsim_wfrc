@@ -24,10 +24,10 @@ The socioeconomic file requires 42 different inputs which can be described as di
 
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
-Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, <!-- other files here-->. 
+Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, the buildings and parcel datasets from WFRC, and urbanization data from WFRC and the TAZ shapefile. <!-- other files here-->. 
 
-```{r, message=FALSE}
-#wfrc data
+```{r, message=FALSE, warning=FALSE}
+#wfrc socioeconomic data
 SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[1] <- "ZONE"
   
@@ -42,6 +42,17 @@ hsyn = read_csv("inputs/synpop/synthetic_households.csv")
 #synpop population/persons data
 psyn = read_csv("inputs/synpop/synthetic_persons.csv")
   colnames(psyn)[3] <- "ZONE"
+  
+#buildings data from WFRC
+buildings <- read_csv("inputs/other/buildings.csv")
+
+#parcel data from WFRC
+parcels <- read_csv("inputs/other/parcels.csv")
+  colnames(parcels)[2] <- "ZONE"
+
+#TAZ shapefile & urbanization data from WFRC
+urban <- read_csv("inputs/other/urbanization.csv")
+  colnames(urban)[2] <- "ZONE"
 ```
 
 
@@ -54,6 +65,9 @@ The Zone data is a list of all the TAZs. This list is copied from the 2018 SE da
 TAZ <- SEWF18 %>%
   select(ZONE)
 ```
+
+Note:
+The synthetic population data has a less total number TAZs than the 2018 SE WFRC data (it is off by a few hundred). The final table created is groubed by the TAZs in the SE WFRC data. Therefore columns from the synthetic population data will have missing fields scattered throughout the final table. <!-- How should I fill in this data? --> 
 
 
 ***
@@ -85,7 +99,6 @@ DSC = d2 %>%
 #update full table
 FullTable <- merge(TAZ, DSC, by = "ZONE", all = TRUE)
 ```
-
 
 ***
 ### TOTHH, HHPOP, TOTPOP
@@ -123,6 +136,36 @@ FullTable <- merge(FullTable, workerbee, by = 'ZONE', all = TRUE)
 
 ***
 ### SFDU, MFDU
+To find data on single family and multi family dwelling units, data from the buildings and parcel datasets from WFRC must be used. To interpret the building type from the buildings dataset the following key can be used as well.
+
+| building_type_id | Building Type                          |
+| ---------------- | -------------------------------------- |
+| 1                | Single Family Residential              |
+| 2                | Multi Family Residential               |
+| 3                | Industrial, Warehouse, & Storage       |
+| 4                | Retail                                 |
+| 5                | Office                                 |
+| 6                | Government & Education                 |
+| 7                | Mixed Use                              |
+| 8                | Other                                  |
+
+We only want the single family and multi family information from the buildings file. 
+```{r}
+#merge tables by parcel id to compare buildings data with the Zone
+units <- merge(buildings, parcels, by = 'parcel_id')
+#create a table that determines the number of single and multi family units in each Zone
+dwell <- units %>%
+  mutate(
+    SFDU = ifelse(building_type_id == 1, residential_units, 0),
+    MFDU = ifelse(building_type_id == 2, residential_units, 0)
+  ) %>% 
+  select(ZONE, SFDU, MFDU) %>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- merge(FullTable, dwell, by = 'ZONE', all = TRUE)
+```
 
 
 ***
@@ -152,8 +195,40 @@ HouseIncome <- hsyn %>%
 FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 ```
 
+
 ***
 ### TOTACRE,	RESACRE,	CIACRE
+The acre data comes from the buildings, parcels, and TAZ shapfile/urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only had a "Developed Acres" field, which is not specific enough for the residential and commercial acres. Therefore, calculations using the parcels and buildings data was used to get the residential and commercial number of acres.
+
+```{r}
+#extract the total number of acres per Zone from the urban file.
+colnames(urban)[5] = "TOTACRE"
+totacre <- urban %>%
+  select(ZONE, TOTACRE)
+
+#update full table
+FullTable <- merge(FullTable, totacre, by = 'ZONE', all = TRUE)
+```
+
+```{r}
+# merge tables by parcel id to compare buildings data with the Zone
+unit <- merge(buildings, parcels, by = 'parcel_id')
+# create a table that sums up the residedntial and commercial acres in each Zone
+acres <- unit %>%
+  mutate(
+    RESACRE = ifelse(building_type_id == 1, parcel_acres, 
+                ifelse(building_type_id == 2, parcel_acres, 0)),
+    CIACRE = ifelse(building_type_id == 3, parcel_acres, 
+                ifelse(building_type_id == 4, parcel_acres, 
+                ifelse(building_type_id == 5, parcel_acres, 0)))
+  ) %>% 
+  select(ZONE, RESACRE, CIACRE)%>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- merge(FullTable, acres, by = 'ZONE', all = TRUE)
+```
 
 
 ***
