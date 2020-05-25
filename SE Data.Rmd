@@ -13,7 +13,6 @@ library(dplyr)
 library(knitr)
 ```
 
-
 ***
 ## Introduction
 The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
@@ -24,7 +23,7 @@ The socioeconomic file requires 42 different inputs which can be described as di
 
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
-Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, the buildings and parcel datasets from WFRC, and urbanization data from WFRC and the TAZ shapefile. <!-- other files here-->. 
+Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, the buildings and parcel datasets from WFRC,  urbanization data from WFRC and the TAZ shapefile, topology data from the AGRC website and the TAZ shapefile, and . <!-- other files here-->. 
 
 ```{r, message=FALSE, warning=FALSE}
 #wfrc socioeconomic data
@@ -32,7 +31,8 @@ SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[1] <- "ZONE"
   
 #synpop expanded household ids
-exhouse = read_csv("inputs/synpop/expanded_household_ids.csv")
+exhouse = read_csv("inputs/synpop/expanded_household_ids.csv", 
+          col_types = list(PUMA = col_integer(), TAZ = col_integer()))
   colnames(exhouse)[3] <- "ZONE"
   
 #synpop household data
@@ -51,8 +51,12 @@ parcels <- read_csv("inputs/other/parcels.csv")
   colnames(parcels)[2] <- "ZONE"
 
 #TAZ shapefile & urbanization data from WFRC
-urban <- read_csv("inputs/other/urbanization.csv")
+urban <- read_csv("inputs/other/urbanization.csv", 
+         col_types = list(Z = col_integer(), ATYPE = col_integer()))
   colnames(urban)[2] <- "ZONE"
+
+#topology data using TAZ shapefie  
+topo <- read_csv("inputs/other/topology.csv")
 ```
 
 
@@ -67,7 +71,7 @@ TAZ <- SEWF18 %>%
 ```
 
 Note:
-The synthetic population data has a less total number TAZs than the 2018 SE WFRC data (it is off by a few hundred). The final table created is groubed by the TAZs in the SE WFRC data. Therefore columns from the synthetic population data will have missing fields scattered throughout the final table. <!-- How should I fill in this data? --> 
+The synthetic population data has a less total number TAZs than the 2018 SE WFRC data (it is off by a few hundred). The final table created is grouped by the TAZs in the SE WFRC data. Therefore, columns from the synthetic population data will have missing fields scattered throughout the final table. <!-- How should I fill in this data? --> 
 
 
 ***
@@ -198,7 +202,7 @@ FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 
 ***
 ### TOTACRE,	RESACRE,	CIACRE
-The acre data comes from the buildings, parcels, and TAZ shapfile/urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only had a "Developed Acres" field, which is not specific enough for the residential and commercial acres. Therefore, calculations using the parcels and buildings data was used to get the residential and commercial number of acres.
+The acre data comes from the buildings, parcels, and TAZ shapefile/urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only had a "Developed Acres" field, which is not specific enough to use for the residential and commercial acres fields. Therefore, calculations using the parcels and buildings data was used to get an estimate of the residential and commercial number of acres.
 
 ```{r}
 #extract the total number of acres per Zone from the urban file.
@@ -327,10 +331,35 @@ FullTable <- merge(FullTable, Employment, by = 'ZONE', all = TRUE)
 
 ***
 ### PRKCST, OPRKCST
+Long term (PRKCST) and short term (OPRKCST) parking rates are found in the WFRC urbanization data file. Techinaclly the long term parking field needed is for parking of 8 hours or more, but we will use permanent parking rates from the urbanization file instead. We will use temporary parking rates for the short term parking field as well. 
+
+```{r}
+#create a table with new parking rates (in cents)
+parking <- urban %>%
+  mutate(
+    PRKCST = PRKCSTPERM * 100,
+    OPRKCST = PRKCSTTEMP * 100
+  ) %>%
+  select(ZONE, PRKCST, OPRKCST)
+  
+#update full table
+FullTable <- merge(FullTable, parking, by = 'ZONE', all = TRUE)
+```
 
 
 ***
 ### area_type
+The area type of each Zone is described on the website from the introduction and is found from the WFRC urbanization data. 
+
+```{r}
+#select the area type column variable from the urbanization file
+colnames(urban)[15] = "area_type"
+area <- urban %>%
+  select(ZONE, area_type)
+
+#update full table
+FullTable <- merge(FullTable, area, by = 'ZONE', all = TRUE)
+```
 
 
 ***
@@ -353,10 +382,46 @@ FullTable <- merge(FullTable, HS, by = 'ZONE', all = TRUE)
 
 ***
 ### TOPOLOGY
+Utah topology information comes from the AGRC website. Elevations for each Zone was found by joining the utah elevation shapefile, located on the website, with the TAZ shapefile within QGIS. 
+
+https://gis.utah.gov/data/elevation-and-terrain/contours/
+
+Then elevation groups can be determined by using the chart below:  
+
+| Elevation Range (ft) | Topology/Steepness |
+| -------------------- | ------------------ |
+| < 5000               | 1 - Flat           |
+| 5000 - 5999          | 2 - In Between     |
+| > 6000               | 3 - Steep          |
+
+Note: Elevation may not be the best way to measure steepness, but it will work for a good estimation.
+
+```{r}
+#select the topology information
+steepy <- topo %>%
+  mutate(
+    TOPOLOGY = ifelse(ContourEle < 5000, 1, ifelse(ContourEle < 6000, 2, 3))
+  ) %>%
+  select(ZONE, TOPOLOGY)
+
+#update full table
+FullTable <- merge(FullTable, steepy, by = 'ZONE', all = TRUE)
+```
 
 
 ***
 ### TERMINAL
+The terminal time for each zone is an estimate taken from WFRC. (We are using their estimations instead of making up our own). Most of them are between 1 and 2 minutes., as many of the TAZs are roughly a similar size in area.  
+
+```{r}
+# create a variable to hold the terminal information from the urbanization file
+colnames(urban)[16] = "TERMINAL"
+term <- urban %>%
+  select(ZONE, TERMINAL)
+
+#update full table
+FullTable <- merge(FullTable, term, by = 'ZONE', all = TRUE)
+```
 
 
 ***
@@ -378,7 +443,7 @@ Other <- SEWF18 %>%
 
 ***
 ## Final Table
-The final table is the combination of all 42 column headers, organized primarily by the socioeconomic data from the 2018 WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
+The final table is the combination of all 42 column headers (described above), organized primarily by the socioeconomic data from the 2018 WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
 
 ```{r}
 #create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
