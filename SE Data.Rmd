@@ -8,7 +8,6 @@ output: html_document
 ```{r, message=FALSE, warning=FALSE}
 library(rmarkdown)
 library(tidyverse)
-library(plyr)
 library(dplyr)
 library(knitr)
 ```
@@ -23,16 +22,17 @@ The socioeconomic file requires 42 different inputs which can be described as di
 
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
-Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, the buildings and parcel datasets from WFRC,  urbanization data from WFRC and the TAZ shapefile, topology data from the AGRC website and the TAZ shapefile, and . <!-- other files here-->. 
+Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, the buildings and parcel datasets from WFRC, the TAZ shapefile data, the  urbanization data from WFRC, topology data from the AGRC website joint with the TAZ shapefile, and school data from the AGRC website joint with the TAZ shapefile.
 
 ```{r, message=FALSE, warning=FALSE}
 #wfrc socioeconomic data
 SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[1] <- "ZONE"
+  colnames(SEWF18)[6] <- "TOTEMP"
+  colnames(SEWF18)[22] <- "HSENROLL"
   
 #synpop expanded household ids
-exhouse = read_csv("inputs/synpop/expanded_household_ids.csv", 
-          col_types = list(PUMA = col_integer(), TAZ = col_integer()))
+exhouse = read_csv("inputs/synpop/expanded_household_ids.csv")
   colnames(exhouse)[3] <- "ZONE"
   
 #synpop household data
@@ -50,13 +50,19 @@ buildings <- read_csv("inputs/other/buildings.csv")
 parcels <- read_csv("inputs/other/parcels.csv")
   colnames(parcels)[2] <- "ZONE"
 
+#TAZ shapefile data
+tazgis <- read_csv("inputs/other/TazQGIS.csv")
+  colnames(tazgis)[1] <- "ZONE"
 #TAZ shapefile & urbanization data from WFRC
-urban <- read_csv("inputs/other/urbanization.csv", 
-         col_types = list(Z = col_integer(), ATYPE = col_integer()))
+urban <- read_csv("inputs/other/urbanization.csv")
   colnames(urban)[2] <- "ZONE"
 
-#topology data using TAZ shapefie  
+#topology data using TAZ  and contour shapefiles 
 topo <- read_csv("inputs/other/topology.csv")
+
+#school data using TAZ and school shapefiles
+schools <- read_csv("inputs/other/schools.csv")
+  colnames(schools)[1] <- "ZONE"
 ```
 
 
@@ -70,38 +76,26 @@ TAZ <- SEWF18 %>%
   select(ZONE)
 ```
 
-Note:
-The synthetic population data has a less total number TAZs than the 2018 SE WFRC data (it is off by a few hundred). The final table created is grouped by the TAZs in the SE WFRC data. Therefore, columns from the synthetic population data will have missing fields scattered throughout the final table. <!-- How should I fill in this data? --> 
+<!--Note:
+The synthetic population data has a less total number TAZs than the 2018 SE WFRC data (it is off by a few hundred). The final table created is grouped by the TAZs in the SE WFRC data. Therefore, columns from the synthetic population data will have missing fields scattered throughout the final table.How should I fill in this data? --> 
 
 
 ***
 ### DISTRICT, SD, COUNTY
-The District and County information is determined by the PUMA. The following table shows this relationship. 
-
-```{r, message=FALSE}
-#display the district/county key that I made up
-dckey = read_csv("inputs/other/DC_Key.csv")
-paged_table(dckey)
-```
-
-The synthetic population data shows the PUMA of each specific zone. Using this data, and the key above, the districts and counties are determined.  
+The District and County information is determined using the data in the TAZ shapefile. The Districts are numbered from 1-17, and the Counties are numbered 1-4. County 1 is Weber, County 2 is Davis, County 3 is Salt Lake, and County 4 is Utah.  
 
 ```{r}
-#create a table of PUMA and ZONE from the exhouse variable
-d1 = exhouse %>%
-  group_by(PUMA, ZONE) %>%
-  summarize_all("sum") %>%
-  arrange(ZONE) %>%
-  select(PUMA,ZONE)
-
-#create a table holding the District, SD, and County info, sorted by their ZONE
-d2 <- (merge(d1, dckey, by = "PUMA"))
-DSC = d2 %>%
-  mutate(SD = DISTRICT)%>%
+#use and select the disctric and county values found in the TAZ table
+dc <- tazgis %>%
+  mutate(
+    #DISTRICT = ifelse(DISTLRG %in% 1:17, DISTLRG, 0)
+    DISTRICT = DISTLRG,
+    SD = DISTRICT
+  ) %>%
   select(ZONE, DISTRICT, SD, COUNTY)
 
 #update full table
-FullTable <- merge(TAZ, DSC, by = "ZONE", all = TRUE)
+FullTable <- merge(TAZ, dc, by = "ZONE", all = TRUE)
 ```
 
 ***
@@ -241,8 +235,8 @@ The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 SE
 
 ```{r}
 #create a variable to hold the Total employment column
-Temp <- SEWF18 %>%
-  select(ZONE, ALLEMP)
+TOTEMP <- SEWF18 %>%
+  select(ZONE, TOTEMP)
 ```
 
 
@@ -293,7 +287,7 @@ age2 <- ages %>%
 ```{r}
 #update full table in the correct table order
 FullTable <- merge(FullTable, age2, by = 'ZONE', all = TRUE)
-FullTable <- merge(FullTable, Temp, by = 'ZONE', all = TRUE)
+FullTable <- merge(FullTable, TOTEMP, by = 'ZONE', all = TRUE)
 FullTable <- merge(FullTable, age1, by = 'ZONE', all = TRUE)
 ```
 
@@ -316,13 +310,13 @@ The code explains how the required employment data is calculated. (Note: constru
 Employment <- SEWF18 %>%
   mutate(
     RETEMPN = RETL + FOOD,
-    FRSEMPN = OFFI + FM_CONS,
+    FPSEMPN = OFFI + FM_CONS,
     HEREMPN = HLTH + GVED,
     OTHEMPN = OTHR + HBJ,
     AGREMPN = FM_AGRI + FM_MING,
     MWTEMPN = MANU + WSLE
   ) %>%
-  select(ZONE, RETEMPN, FRSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN)
+  select(ZONE, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN)
 
 #update full table
 FullTable <- merge(FullTable, Employment, by = 'ZONE', all = TRUE)
@@ -369,7 +363,7 @@ The highschool enrollment data is copied from the 2018 SE WFRC data.
 ```{r}
 #create a variable to hold the high school column
 HS <- SEWF18 %>%
-  select(ZONE, Enrol_High)
+  select(ZONE, HSENROLL)
 
 #update full table
 FullTable <- merge(FullTable, HS, by = 'ZONE', all = TRUE)
@@ -378,6 +372,33 @@ FullTable <- merge(FullTable, HS, by = 'ZONE', all = TRUE)
 
 ***
 ### COLLFTE, COLLPTE
+College data was determined from a variety of sources. First, a joined table using the TAZ shapefile and a Schools shapefile from the AGRC website was made on QGIS. The website of the schools shapefile is found here:
+
+https://gis.utah.gov/data/society/schools-libraries/
+
+This table was then edited to include information from the web on full time and part time enrollments for many of the "Higher Education" schools listed. The website for these can be seen in the data source column of that table. Some data wasn't found on the web, so data from WFRC's college information was used. The WFRC information is shown in the table below: 
+
+```{r, message=FALSE}
+#display the WFRC College information
+scho = read_csv("inputs/other/schools_wfrc.csv")
+paged_table(scho)
+```
+
+WFRC only had information on total enrolled students, so part time students for these colleges is represented as 0, even if that is not necessarily true. This is why data from the web was prioritized over the WFRC information (it had part time student data). Also, not all the "Higher Education" schools from the table have filled in information; a deeper search on the web could find these potential numbers. The majority of the colleges have information though, and so we use the data that we do have.  
+
+```{r}
+#sort the TAZ/Schools data table to the information wanted
+colleges <- schools %>%
+  mutate(
+    COLLFTE = ifelse(EDTYPE == "Higher Education", ENROLL_FT, 0),
+    COLLPTE = ifelse(EDTYPE == "Higher Education", ENROLL_PT, 0)
+  ) %>%
+  select(ZONE, COLLFTE, COLLPTE) 
+
+#update full table
+FullTable <- merge(FullTable, colleges, by = 'ZONE', all = TRUE)
+
+```
 
 
 ***
@@ -386,21 +407,27 @@ Utah topology information comes from the AGRC website. Elevations for each Zone 
 
 https://gis.utah.gov/data/elevation-and-terrain/contours/
 
-Then elevation groups can be determined by using the chart below:  
+A table was made from joining the TAZ and Contour shapefiles, and the various eleveations for each range are displayed within the table. The table below shows the relationship between the difference in elevation in regards to its steepness.  
 
-| Elevation Range (ft) | Topology/Steepness |
-| -------------------- | ------------------ |
-| < 5000               | 1 - Flat           |
-| 5000 - 5999          | 2 - In Between     |
-| > 6000               | 3 - Steep          |
+| Change in Elevation (ft) | Topology/Steepness |
+| ------------------------ | ------------------ |
+| 0                        | 1 - Flat           |
+| < 600                    | 2 - In Between     |
+| >= 600                   | 3 - Steep          |
 
-Note: Elevation may not be the best way to measure steepness, but it will work for a good estimation.
+<!--Note: I decided that a a change of 600ft or more in elevation is steep, so if that is incorrect, it must be changed.-->
 
 ```{r}
-#select the topology information
+#determine the steepness based on the change in elevation for each Zone
 steepy <- topo %>%
+  select(ZONE, ContourEle) %>%
+  group_by(ZONE) %>%
+  summarize(
+    mi = min(ContourEle),
+    ma = max(ContourEle)
+  ) %>%
   mutate(
-    TOPOLOGY = ifelse(ContourEle < 5000, 1, ifelse(ContourEle < 6000, 2, 3))
+    TOPOLOGY = ifelse((ma -mi) == 0, 1, ifelse((ma - mi) < 600, 2, 3))
   ) %>%
   select(ZONE, TOPOLOGY)
 
@@ -448,5 +475,22 @@ The final table is the combination of all 42 column headers (described above), o
 ```{r}
 #create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
 FullTable <- merge(FullTable, Other, by = 'ZONE', all = TRUE)
-paged_table(FullTable)
+
+#select up to the last row wanted, so that there are no extra, undesired values
+FullTable <- slice(FullTable, 1:2928)
+
+#eliminate all rows that don't have a district number
+FullTable <- FullTable[!(FullTable$DISTRICT == 0),]
+
+#convert columns of the fulltable to the right data type
+FinalTable <- FullTable %>%
+  mutate(
+    ZONE = as.integer(ZONE), DISTRICT = as.integer(DISTRICT), SD = as.integer(SD), COUNTY = as.integer(COUNTY), TOTHH = as.integer(TOTHH), HHPOP = as.integer(HHPOP), TOTPOP = as.integer(TOTPOP), EMPRES = as.integer(EMPRES), SFDU = as.integer(SFDU), MFDU = as.integer(MFDU), HHINCQ1 = as.integer(HHINCQ1), HHINCQ2 = as.integer(HHINCQ2), HHINCQ3 = as.integer(HHINCQ3), HHINCQ4 = as.integer(HHINCQ4), RESACRE = as.integer(RESACRE), CIACRE = as.integer(CIACRE), TOTEMP = as.integer(TOTEMP), AGE0004 = as.integer(AGE0004), AGE0519 = as.integer(AGE0519), AGE2044 = as.integer(AGE2044), AGE4564 = as.integer(AGE4564), AGE65P = as.integer(AGE65P), RETEMPN = as.integer(RETEMPN), FPSEMPN = as.integer(FPSEMPN), HEREMPN = as.integer(HEREMPN), AGREMPN = as.integer(AGREMPN), MWTEMPN = as.integer(MWTEMPN), OTHEMPPN = as.integer(OTHEMPN), area_type = as.integer(area_type), TOPOLOGY = as.integer(TOPOLOGY), ZERO = as.integer(ZERO), hhlds = as.integer(hhlds), sftaz = as.integer(sftaz), gqpop = as.integer(gqpop)
+  )
+
+#replace all "NA" values with 0
+FinalTable[is.na(FinalTable)] <- 0
+
+write_csv(FinalTable, "SE_Data.csv")
+paged_table(FinalTable)
 ```
