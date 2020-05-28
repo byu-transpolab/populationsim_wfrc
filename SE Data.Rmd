@@ -29,11 +29,7 @@ SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[1] <- "ZONE"
   colnames(SEWF18)[6] <- "TOTEMP"
   colnames(SEWF18)[22] <- "HSENROLL"
-  
-#synpop expanded household ids
-exhouse = read_csv("output/expanded_household_ids.csv")
-  colnames(exhouse)[3] <- "ZONE"
-  
+
 #synpop household data
 hsyn = read_csv("output/synthetic_households.csv")
   colnames(hsyn)[4] <- "ZONE"
@@ -52,6 +48,7 @@ parcels <- read_csv("inputs/other/parcels.csv")
 #TAZ shapefile data
 tazgis <- read_csv("inputs/other/TazQGIS.csv")
   colnames(tazgis)[1] <- "ZONE"
+  
 #TAZ shapefile & urbanization data from WFRC
 urban <- read_csv("inputs/other/urbanization.csv")
   colnames(urban)[2] <- "ZONE"
@@ -78,13 +75,12 @@ TAZ <- SEWF18 %>%
 
 ***
 ### DISTRICT, SD, COUNTY
-The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-4. County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, and County 4 being Utah.  
+The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-4: County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, and County 4 being Utah. Notice that SD is a copy of the district category.
 
 ```{r}
 #use and select the district and county values found in the TAZ table
 dc <- tazgis %>%
   mutate(
-    #DISTRICT = ifelse(DISTLRG %in% 1:17, DISTLRG, 0)
     DISTRICT = DISTLRG,
     SD = DISTRICT
   ) %>%
@@ -96,7 +92,7 @@ FullTable <- merge(TAZ, dc, by = "ZONE", all = TRUE)
 
 ***
 ### TOTHH, HHPOP, TOTPOP
-The total household (TOTHH) and total population (TOTPOP) data comes from the 2018 SE WFRC data. Household population (HHPOP) is a funciton of household size (HHSIZE) which is also found in the same data set. 
+The total household (TOTHH) and total population (TOTPOP) data comes from the 2018 SE WFRC data. Household population (HHPOP) is a funciton of household size (HHSIZE), which is also found in the same data set. 
 
 ```{r}
 #create a table of the household and total population data from the wfrc data
@@ -111,7 +107,7 @@ FullTable <- merge(FullTable, HH, by = 'ZONE', all = TRUE)
 
 ***
 ### EMPRES
-The number of employed residents is determined by the data in the synthetic population persons file. If the COW (class of worker) categoty isn't empty, the person is assumed to be employed. 
+The number of employed residents is determined by the data in the synthetic population persons file. If the COW (class of worker) categoty isn't empty, then the person is assumed to be employed. 
 
 ```{r}
 #create a table that determines the number of employed residents in each ZONE
@@ -147,6 +143,7 @@ We only want the single family and multi family information from the buildings f
 ```{r}
 #merge tables by parcel id to compare buildings data with the Zone
 units <- merge(buildings, parcels, by = 'parcel_id')
+
 #create a table that determines the number of single and multi family units in each Zone
 dwell <- units %>%
   mutate(
@@ -192,7 +189,7 @@ FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 
 ***
 ### TOTACRE,	RESACRE,	CIACRE
-The acre data comes from the buildings, parcels, and TAZ shapefile/urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only had a "Developed Acres" field, which is not specific enough to use for the residential and commercial acres fields. Therefore, calculations using the parcels and buildings data was used to get an estimate of the residential and commercial number of acres.
+The acre data comes from the buildings, parcels, and TAZ shapefile/urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only has a "Developed Acres" field, which is not specific enough to use for the residential and commercial acres fields. Therefore, calculations using the parcels and buildings data was used to get an estimate of the residential and commercial number of acres.
 
 First the number of total acres is calculate easily. 
 ```{r}
@@ -205,11 +202,12 @@ totacre <- urban %>%
 FullTable <- merge(FullTable, totacre, by = 'ZONE', all = TRUE)
 ```
 
-Next, we use the building and parcel datasets to determine residential and commercial acre amounts per Zone based on Building Type (see table under SFDU, MFDU category).
+Next, we use the building and parcel datasets to determine residential and commercial acre amounts per Zone based on Building Type (see table under SFDU, MFDU category for details on Building Type).
 
 ```{r}
 # merge tables by parcel id to compare buildings data with the Zone
 unit <- merge(buildings, parcels, by = 'parcel_id')
+
 # create a table that sums up the residedntial and commercial acres in each Zone
 acres <- unit %>%
   mutate(
@@ -271,8 +269,9 @@ age1 <- ages %>%
 
 
 ***
-### SHPOP62+
+### SHPOP62P
 The SHPOP62P category is determined from the sythetic popoulation persons data as well. It takes into account the total population, which is determined by summing up all of the age groups instead of using the TOTPOP field. 
+
 ```{r}
 #create a table for the 62+ age group data
 age2 <- ages %>%
@@ -343,7 +342,7 @@ FullTable <- merge(FullTable, parking, by = 'ZONE', all = TRUE)
 
 ***
 ### area_type
-The area type of each Zone is described on the website from the Introduction and is found from the WFRC urbanization data. 
+The area type of each Zone is described on the website described in the Introduction and is found from the WFRC urbanization data. 
 
 ```{r}
 #select the area type column variable from the urbanization file
@@ -376,7 +375,7 @@ College data was determined from a variety of sources. First, a joined table usi
 
 https://gis.utah.gov/data/society/schools-libraries/
 
-This table was then edited to include information from the web on full time and part time enrollments for many of the "Higher Education" schools listed. The website for these can be seen in the data source column of that table. Some data wasn't found on the web, so data from WFRC's college information was used. The WFRC information is shown in the table below: 
+This table was then edited to include information from the web on full time and part time enrollments for many of the "Higher Education" schools listed. The websites for these can be seen in the data source column of that table. Some data wasn't found on the web, so data from WFRC's college information was used. The WFRC information is shown in the table below: 
 
 ```{r, message=FALSE}
 #display the WFRC College information
@@ -384,7 +383,7 @@ scho = read_csv("inputs/other/schools_wfrc.csv")
 paged_table(scho)
 ```
 
-WFRC only had information on total enrolled students, so part time students for these colleges is represented as 0, even if that is not necessarily true. This is why data from the web was prioritized over the WFRC information (it had part time student data). Also, not all the "Higher Education" schools from the table have filled in information; a deeper search on the web could find these potential numbers. The majority of the colleges have information though, and so we use the data that we do have.  
+WFRC only had information on total enrolled students, so part time students for these colleges is represented as 0, even if that is not necessarily true. This is why data from the web was prioritized over the WFRC information (it had part time student data). Also, not all the "Higher Education" schools from the table have completed information; a deeper search on the web could find these potential numbers. The majority of the colleges have information though, and so we use the data that we do have.  
 
 ```{r}
 #sort the TAZ/Schools data table to the information wanted
@@ -440,7 +439,7 @@ FullTable <- merge(FullTable, steepy, by = 'ZONE', all = TRUE)
 
 ***
 ### TERMINAL
-The terminal time for each zone is an estimate taken from WFRC. (We are using their estimations instead of making up our own). Most of them are between 1 and 2 minutes., as many of the TAZs are roughly a similar size in area.  
+The terminal time for each zone is an estimate taken from WFRC. (We are using their estimations instead of making up our own). Most of them are between 1 and 2 minutes. This makes sense as many of the TAZs are roughly a similar size in area, that area not being too large.  
 
 ```{r}
 # create a variable to hold the terminal information from the urbanization file
@@ -472,7 +471,9 @@ Other <- SEWF18 %>%
 
 ***
 ## Final Table
-The final table is the combination of all 42 column headers (described above), organized primarily by the socioeconomic data from the 2018 WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
+The final table is the combination of all 42 column headers (described above), organized primarily by the socioeconomic data from the 2018 SE WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
+
+Note: Some districts when computted were not found in the QGIS TAZ table and therefore their corresponding rows were removed in the final table. Most of these rows had the value of 0 for the rest of their column categories anyway so I assume this is okay to do. Also, since the data isn't perfect many cells displayed "NA". This is changed to the value of 0.
 
 ```{r}
 #create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
@@ -484,27 +485,23 @@ FullTable <- slice(FullTable, 1:2928)
 #eliminate all rows that don't have a district number
 FullTable <- FullTable[!(FullTable$DISTRICT == 0),]
 
+#replace all "NA" values with 0
+FullTable[is.na(FullTable)] <- 0
+
 ```
 
-It is important to determine the correct data type for each column header; data types for each column are described on the website found in the Introduction section.
+It is important to determine the correct data type for each column header; data types for each column are described on the website found in the Introduction section. Most of the columns are represented as type integer.
 
 ```{r}
 #convert columns of the fulltable to the right data type
 FinalTable <- FullTable %>%
   mutate(
-    ZONE = as.integer(ZONE), DISTRICT = as.integer(DISTRICT), SD = as.integer(SD), COUNTY = as.integer(COUNTY), TOTHH = as.integer(TOTHH), HHPOP = as.integer(HHPOP), TOTPOP = as.integer(TOTPOP), EMPRES = as.integer(EMPRES), SFDU = as.integer(SFDU), MFDU = as.integer(MFDU), HHINCQ1 = as.integer(HHINCQ1), HHINCQ2 = as.integer(HHINCQ2), HHINCQ3 = as.integer(HHINCQ3), HHINCQ4 = as.integer(HHINCQ4), RESACRE = as.integer(RESACRE), CIACRE = as.integer(CIACRE), TOTEMP = as.integer(TOTEMP), AGE0004 = as.integer(AGE0004), AGE0519 = as.integer(AGE0519), AGE2044 = as.integer(AGE2044), AGE4564 = as.integer(AGE4564), AGE65P = as.integer(AGE65P), RETEMPN = as.integer(RETEMPN), FPSEMPN = as.integer(FPSEMPN), HEREMPN = as.integer(HEREMPN), AGREMPN = as.integer(AGREMPN), MWTEMPN = as.integer(MWTEMPN), OTHEMPPN = as.integer(OTHEMPN), area_type = as.integer(area_type), TOPOLOGY = as.integer(TOPOLOGY), ZERO = as.integer(ZERO), hhlds = as.integer(hhlds), sftaz = as.integer(sftaz), gqpop = as.integer(gqpop)
+    ZONE = as.integer(ZONE), DISTRICT = as.integer(DISTRICT), SD = as.integer(SD), COUNTY = as.integer(COUNTY), TOTHH = as.integer(TOTHH), HHPOP = as.integer(HHPOP), TOTPOP = as.integer(TOTPOP), EMPRES = as.integer(EMPRES), SFDU = as.integer(SFDU), MFDU = as.integer(MFDU), HHINCQ1 = as.integer(HHINCQ1), HHINCQ2 = as.integer(HHINCQ2), HHINCQ3 = as.integer(HHINCQ3), HHINCQ4 = as.integer(HHINCQ4), RESACRE = as.integer(RESACRE), CIACRE = as.integer(CIACRE), TOTEMP = as.integer(TOTEMP), AGE0004 = as.integer(AGE0004), AGE0519 = as.integer(AGE0519), AGE2044 = as.integer(AGE2044), AGE4564 = as.integer(AGE4564), AGE65P = as.integer(AGE65P), RETEMPN = as.integer(RETEMPN), FPSEMPN = as.integer(FPSEMPN), HEREMPN = as.integer(HEREMPN), AGREMPN = as.integer(AGREMPN), MWTEMPN = as.integer(MWTEMPN), OTHEMPN = as.integer(OTHEMPN), area_type = as.integer(area_type), TOPOLOGY = as.integer(TOPOLOGY), ZERO = as.integer(ZERO), hhlds = as.integer(hhlds), sftaz = as.integer(sftaz), gqpop = as.integer(gqpop)
   )
 ```
 
-Some values are missing, as not all of the data was perfect, so we will put the value of 0 in for any missing data. The final table can then be seen as a csv file, or in the paged format below. 
-
+The Final Table can be seen in the paged table format below, or as a csv file. 
 ```{r}
-#replace all "NA" values with 0
-FinalTable[is.na(FinalTable)] <- 0
-
-#delete random final column instead of finding out why there's a random column and fixing it above somewhere
-FinalTable <- FinalTable[,-43]
-
 write_csv(FinalTable, "SE_Data.csv")
 paged_table(FinalTable)
 ```
