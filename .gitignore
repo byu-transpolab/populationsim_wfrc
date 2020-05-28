@@ -5,8 +5,4 @@ data/seed_households.csv
 data/seed_persons.csv
 builder_cache/*
 builder_files/*
-<<<<<<< HEAD
-SE-Data.html
-=======
 inputs/synpop/synthetic_persons.csv
->>>>>>> f138b712034202f8b0ddceaca7f29f1f6c553097
