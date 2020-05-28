@@ -8,7 +8,6 @@ output: html_document
 ```{r, message=FALSE, warning=FALSE}
 library(rmarkdown)
 library(tidyverse)
-library(dplyr)
 library(knitr)
 ```
 
@@ -32,15 +31,15 @@ SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[22] <- "HSENROLL"
   
 #synpop expanded household ids
-exhouse = read_csv("inputs/synpop/expanded_household_ids.csv")
+exhouse = read_csv("output/expanded_household_ids.csv")
   colnames(exhouse)[3] <- "ZONE"
   
 #synpop household data
-hsyn = read_csv("inputs/synpop/synthetic_households.csv")
+hsyn = read_csv("output/synthetic_households.csv")
   colnames(hsyn)[4] <- "ZONE"
   
 #synpop population/persons data
-psyn = read_csv("inputs/synpop/synthetic_persons.csv")
+psyn = read_csv("output/synthetic_persons.csv")
   colnames(psyn)[3] <- "ZONE"
   
 #buildings data from WFRC
