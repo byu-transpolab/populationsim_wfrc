@@ -77,6 +77,8 @@ TAZ <- SEWF18 %>%
 ### DISTRICT, SD, COUNTY
 The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-4: County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, and County 4 being Utah. Notice that SD is a copy of the district category.
 
+Note: Some districts when computted were not found in the QGIS TAZ table and therefore they are resprested by the value of 0. If this causes problems in ActivitySim, assumptions about district values can be made. For now, we keep them 0.
+
 ```{r}
 #use and select the district and county values found in the TAZ table
 dc <- tazgis %>%
@@ -87,7 +89,7 @@ dc <- tazgis %>%
   select(ZONE, DISTRICT, SD, COUNTY)
 
 #update full table
-FullTable <- merge(TAZ, dc, by = "ZONE", all = TRUE)
+FullTable <- left_join(TAZ, dc, by = "ZONE", all = TRUE)
 ```
 
 ***
@@ -101,7 +103,7 @@ HH <- SEWF18 %>%
   select(ZONE, TOTHH, HHPOP, TOTPOP)
 
 #update full table
-FullTable <- merge(FullTable, HH, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, HH, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -120,7 +122,7 @@ workerbee <- psyn %>%
   summarize_all("sum")
 
 #update full table
-FullTable <- merge(FullTable, workerbee, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, workerbee, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -155,7 +157,7 @@ dwell <- units %>%
   summarize_all("sum")
 
 #update full table
-FullTable <- merge(FullTable, dwell, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, dwell, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -183,7 +185,7 @@ HouseIncome <- hsyn %>%
   summarize_all("sum")
 
 #update full table
-FullTable <- merge(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -199,7 +201,7 @@ totacre <- urban %>%
   select(ZONE, TOTACRE)
 
 #update full table
-FullTable <- merge(FullTable, totacre, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, totacre, by = 'ZONE', all = TRUE)
 ```
 
 Next, we use the building and parcel datasets to determine residential and commercial acre amounts per Zone based on Building Type (see table under SFDU, MFDU category for details on Building Type).
@@ -222,7 +224,7 @@ acres <- unit %>%
   summarize_all("sum")
 
 #update full table
-FullTable <- merge(FullTable, acres, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, acres, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -285,9 +287,9 @@ It is important to update the table in the correct order, to match the order tha
 
 ```{r}
 #update full table in the correct table order
-FullTable <- merge(FullTable, age2, by = 'ZONE', all = TRUE)
-FullTable <- merge(FullTable, TOTEMP, by = 'ZONE', all = TRUE)
-FullTable <- merge(FullTable, age1, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, age2, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, TOTEMP, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, age1, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -301,24 +303,24 @@ empkey = read_csv("inputs/other/EMP_Key.csv")
 kable(empkey)
 ```
 
-The code explains how the required employment data is calculated. (Note: construction is assumed to be a professional service in the calculation).
+The code explains how the required employment data is calculated. (Note: These are based off of the NAICS-Based Employment Categories in MTC Data Inputs Table from the mtc_tm1_documentation.pdf found in the Box account, wav_simulation folder).
 
 ```{r}
 #create a table with new employment columns, based on the WFRC ones
 #select the ones we want to use
 Employment <- SEWF18 %>%
   mutate(
-    RETEMPN = RETL + FOOD,
-    FPSEMPN = OFFI + FM_CONS,
-    HEREMPN = HLTH + GVED,
-    OTHEMPN = OTHR + HBJ,
+    RETEMPN = RETL,
+    FPSEMPN = OFFI,
+    HEREMPN = HLTH + GVED + FOOD,
+    OTHEMPN = OTHR + HBJ + FM_CONS,
     AGREMPN = FM_AGRI + FM_MING,
     MWTEMPN = MANU + WSLE
   ) %>%
   select(ZONE, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN)
 
 #update full table
-FullTable <- merge(FullTable, Employment, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, Employment, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -336,7 +338,7 @@ parking <- urban %>%
   select(ZONE, PRKCST, OPRKCST)
   
 #update full table
-FullTable <- merge(FullTable, parking, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, parking, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -351,7 +353,7 @@ area <- urban %>%
   select(ZONE, area_type)
 
 #update full table
-FullTable <- merge(FullTable, area, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, area, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -365,7 +367,7 @@ HS <- SEWF18 %>%
   select(ZONE, HSENROLL)
 
 #update full table
-FullTable <- merge(FullTable, HS, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, HS, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -394,9 +396,11 @@ colleges <- schools %>%
   ) %>%
   select(ZONE, COLLFTE, COLLPTE) 
 
-#update full table
-FullTable <- merge(FullTable, colleges, by = 'ZONE', all = TRUE)
+#delete duplicated Zones
+coll <- colleges[!duplicated(colleges$ZONE), ]
 
+#update full table
+FullTable <- left_join(FullTable, coll, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -416,7 +420,7 @@ A table was made from joining the TAZ and Contour shapefiles, and the various el
 | < 600                    | 2 - In Between     |
 | >= 600                   | 3 - Steep          |
 
-<!--Note: I decided that a a change of 600ft or more in elevation is steep, so if that is incorrect, it must be changed.-->
+Note: I decided that  a change of 600ft or more in elevation is steep, so if that is incorrect, it must be changed.
 
 ```{r}
 #determine the steepness based on the change in elevation for each Zone
@@ -433,7 +437,7 @@ steepy <- topo %>%
   select(ZONE, TOPOLOGY)
 
 #update full table
-FullTable <- merge(FullTable, steepy, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, steepy, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -448,7 +452,7 @@ term <- urban %>%
   select(ZONE, TERMINAL)
 
 #update full table
-FullTable <- merge(FullTable, term, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, term, by = 'ZONE', all = TRUE)
 ```
 
 
@@ -473,21 +477,14 @@ Other <- SEWF18 %>%
 ## Final Table
 The final table is the combination of all 42 column headers (described above), organized primarily by the socioeconomic data from the 2018 SE WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
 
-Note: Some districts when computted were not found in the QGIS TAZ table and therefore their corresponding rows were removed in the final table. Most of these rows had the value of 0 for the rest of their column categories anyway so I assume this is okay to do. Also, since the data isn't perfect many cells displayed "NA". This is changed to the value of 0.
+Note: Many cells display the value of "NA"; this is changed to the value of 0.
 
 ```{r}
 #create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
-FullTable <- merge(FullTable, Other, by = 'ZONE', all = TRUE)
-
-#select up to the last row wanted, so that there are no extra, undesired values
-FullTable <- slice(FullTable, 1:2928)
-
-#eliminate all rows that don't have a district number
-FullTable <- FullTable[!(FullTable$DISTRICT == 0),]
+FullTable <- left_join(FullTable, Other, by = 'ZONE', all = TRUE)
 
 #replace all "NA" values with 0
 FullTable[is.na(FullTable)] <- 0
-
 ```
 
 It is important to determine the correct data type for each column header; data types for each column are described on the website found in the Introduction section. Most of the columns are represented as type integer.
