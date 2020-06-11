@@ -26,18 +26,19 @@ we are going to create three levels of controls:
   2. Tract-level: household size and income, and person age
   3. TAZ level: number of households
   
-We are going to build this synthetic population for Weber, Davis, Salt Lake, and Utah Counties in
+We are going to build this synthetic population for Box Elder, Weber, Davis, Salt Lake, and Utah Counties in
 Utah. This involves the ranges of PUMAs shown below. We can get the census tracts these PUMAs
 contain from the Census Bureau's Tract / PUMA lookup file. 
 
 ```{r puma}
 puma_url <- "https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt"
-puma_tract <- read_csv(puma_url, col_types = list(PUMA5CE = col_character())) %>%
+puma_tract <- read_csv(puma_url, col_types = list(PUMA5CE = col_integer())) %>%
+  filter(STATEFP %in% c(49)) %>% 
   transmute(
     TRACT = str_c(STATEFP, COUNTYFP, TRACTCE),  
     PUMA = PUMA5CE
   ) %>%
-  filter(PUMA %in% c(49001:49004, 11001:11002, 35001:35009, 57001:57002))
+  filter(PUMA %in% c(49001:49004, 11001:11002, 35001:35009, 57001:57002, 03001:03004)) 
 ```
 
 We also want to get the geographic boundaries layer for these tracts. We get
@@ -128,8 +129,8 @@ string and the household target is an integer.
 
 ```{r taz_control}
 # read socioeconomic data file
-(taz_control <- read_csv("inputs/SE_MAG_2020.csv") %>% 
-  transmute(TAZ = as.character(TAZID), HHBASE = as.integer(ceiling(TOTHH))) %>% 
+(taz_control <- read_csv("inputs/Household_Projections_(TAZ).csv") %>% 
+  transmute(TAZ = as.character(TAZ2), HHBASE = as.integer(ceiling(YEAR2020))) %>% 
   filter(TAZ %in% crosswalk$TAZ))
 ```
 
