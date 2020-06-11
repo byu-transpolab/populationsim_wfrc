@@ -13,7 +13,7 @@ library(knitr)
 
 ***
 ## Introduction
-The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Weber, Davis, Salt Lake, Utah). This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
+The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Box Elder, Weber, Davis, Salt Lake, Utah). This data can also be classified as landuse data. This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
 
 The socioeconomic file requires 42 different inputs which can be described as different column headings. These headings are copied directly from the ActivitySim Example's input file. The headings are the following:  
 
@@ -21,15 +21,32 @@ The socioeconomic file requires 42 different inputs which can be described as di
 
 The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
 
-Also, in order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data file, the synthetic population files, the buildings and parcel datasets from WFRC, the TAZ shapefile data, the  urbanization data from WFRC, topology data from the AGRC website joint with the TAZ shapefile, and school data from the AGRC website joint with the TAZ shapefile.
+The next section describes the data input sources, and then the rest of the page describes how each of the 42 sections are calculated using the data sources. A final table is created at the end. Specifically, the final results are presented as a csv file named SE_Data.csv.
 
+***
+### Data Sources
+In order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data files, the synthetic population files, the buildings, parcel, and urbanization datasets from WFRC, the TAZ shapefile data, topology data from the AGRC website joint with the TAZ shapefile, and school data from the AGRC website joint with the TAZ shapefile.
+
+For the WFRC SE data files, data from Box Elder is only used for Zones 1-135. The rest of the data is used from the SE 2018 file (which includes the other counties).
 ```{r, message=FALSE, warning=FALSE}
-#wfrc socioeconomic data
+#wfrc Box Elder Se Data, extract needed rows
+SEWFBOX <- read_csv("inputs/SE_Box_Elder_2018.csv")
+  colnames(SEWFBOX)[1] <- "ZONE"
+  colnames(SEWFBOX)[6] <- "TOTEMP"
+  colnames(SEWFBOX)[22] <- "HSENROLL"
+SEWFBOX <- SEWFBOX[303:437,]
+
+#wfrc se data from 2018
 SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
   colnames(SEWF18)[1] <- "ZONE"
   colnames(SEWF18)[6] <- "TOTEMP"
   colnames(SEWF18)[22] <- "HSENROLL"
 
+SEWF <- rbind(SEWFBOX,SEWF18)
+```
+
+The synthetic population files are used for households and persons data. WFRC provided data on buidings, parcels, and urbanization as well.
+```{r, message=FALSE, warning=FALSE}
 #synpop household data
 hsyn = read_csv("output/synthetic_households.csv")
   colnames(hsyn)[4] <- "ZONE"
@@ -45,14 +62,17 @@ buildings <- read_csv("inputs/other/buildings.csv")
 parcels <- read_csv("inputs/other/parcels.csv")
   colnames(parcels)[2] <- "ZONE"
 
+#TAZ shapefile & urbanization data from WFRC
+urban <- read_csv("inputs/other/urbanization.csv")
+  colnames(urban)[2] <- "ZONE"  
+```
+
+The TAZ shapefile data (found in the inputs folder as a .geojson file) is used primary for the total zones, topology data, and school data.
+```{r, message=FALSE, warning=FALSE}
 #TAZ shapefile data
 tazgis <- read_csv("inputs/other/TazQGIS.csv")
   colnames(tazgis)[1] <- "ZONE"
   
-#TAZ shapefile & urbanization data from WFRC
-urban <- read_csv("inputs/other/urbanization.csv")
-  colnames(urban)[2] <- "ZONE"
-
 #topology data using TAZ  and contour shapefiles 
 topo <- read_csv("inputs/other/topology.csv")
 
@@ -64,18 +84,18 @@ schools <- read_csv("inputs/other/schools.csv")
 
 ***
 ### ZONE
-The Zone data is a list of all the TAZs. This list is copied from the 2018 SE data from WFRC. A lot of other data comes from this file as well.
+The Zone data is a list of all the TAZs. This list is copied from the TAZ shapefile attribute table.
 
 ```{r, layout = "1-body-outset", message=FALSE, warning=FALSE}
 #create a variable to hold the TAZ/Zone column
-TAZ <- SEWF18 %>%
+TAZ <- tazgis %>%
   select(ZONE)
 ```
 
 
 ***
 ### DISTRICT, SD, COUNTY
-The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-4: County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, and County 4 being Utah. Notice that SD is a copy of the district category.
+The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-5: County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, County 4 being Utah, and County 5 being Box Elder. Notice that SD is a copy of the district category.
 
 Note: Some districts when computted were not found in the QGIS TAZ table and therefore they are resprested by the value of 0. If this causes problems in ActivitySim, assumptions about district values can be made. For now, we keep them 0.
 
@@ -98,7 +118,7 @@ The total household (TOTHH) and total population (TOTPOP) data comes from the 20
 
 ```{r}
 #create a table of the household and total population data from the wfrc data
-HH <- SEWF18 %>%
+HH <- SEWF %>%
   mutate(HHPOP = TOTHH * HHSIZE) %>%
   select(ZONE, TOTHH, HHPOP, TOTPOP)
 
@@ -234,7 +254,7 @@ The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 SE
 
 ```{r}
 #create a variable to hold the Total employment column
-TOTEMP <- SEWF18 %>%
+TOTEMP <- SEWF %>%
   select(ZONE, TOTEMP)
 ```
 
@@ -308,7 +328,7 @@ The code explains how the required employment data is calculated. (Note: These a
 ```{r}
 #create a table with new employment columns, based on the WFRC ones
 #select the ones we want to use
-Employment <- SEWF18 %>%
+Employment <- SEWF %>%
   mutate(
     RETEMPN = RETL,
     FPSEMPN = OFFI,
@@ -363,7 +383,7 @@ The highschool enrollment data is copied from the 2018 SE WFRC data.
 
 ```{r}
 #create a variable to hold the high school column
-HS <- SEWF18 %>%
+HS <- SEWF %>%
   select(ZONE, HSENROLL)
 
 #update full table
@@ -422,7 +442,7 @@ A table was made from joining the TAZ and Contour shapefiles, and the various el
 
 Note: I decided that  a change of 600ft or more in elevation is steep, so if that is incorrect, it must be changed.
 
-```{r}
+```{r, message=FALSE}
 #determine the steepness based on the change in elevation for each Zone
 steepy <- topo %>%
   select(ZONE, ContourEle) %>%
@@ -462,12 +482,12 @@ The last columns needed for the input columns are either repeats or easy to calc
 
 ```{r}
 #create a table to hold the remaining columns after calculating them
-Other <- SEWF18 %>%
+Other <- FullTable %>%
   mutate(
     ZERO = 0,
     hhlds = TOTHH,
     sftaz = ZONE,
-    gqpop = TOTPOP - (TOTHH * HHSIZE)
+    gqpop = TOTPOP - HHPOP
   ) %>%
   select(ZONE, ZERO, hhlds, sftaz, gqpop)
 ```
@@ -499,7 +519,7 @@ FinalTable <- FullTable %>%
 
 The Final Table can be seen in the paged table format below, or as a csv file. 
 ```{r}
-write_csv(FinalTable, "SE_Data.csv")
+#write_csv(FinalTable, "SE_Data.csv")
 paged_table(FinalTable)
 ```
 
