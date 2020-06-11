@@ -38,7 +38,9 @@ puma_tract <- read_csv(puma_url, col_types = list(PUMA5CE = col_integer())) %>%
     TRACT = str_c(STATEFP, COUNTYFP, TRACTCE),  
     PUMA = PUMA5CE
   ) %>%
-  filter(PUMA %in% c(49001:49004, 11001:11002, 35001:35009, 57001:57002, 03001:03004)) 
+  filter(PUMA %in% c(49001:49004, 11001:11002, 35001:35009, 57001:57002, 03001:03004))
+puma_tract$PUMA <- formatC(puma_tract$PUMA, width = 5, flag = "0")
+  
 ```
 
 We also want to get the geographic boundaries layer for these tracts. We get
