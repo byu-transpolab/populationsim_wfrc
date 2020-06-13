@@ -27,7 +27,7 @@ The next section describes the data input sources, and then the rest of the page
 ### Data Sources
 In order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data files, the synthetic population files, the buildings, parcel, and urbanization datasets from WFRC, the TAZ shapefile data, topology data from the AGRC website joint with the TAZ shapefile, and school data from the AGRC website joint with the TAZ shapefile.
 
-For the WFRC SE data files, data from Box Elder is only used for Zones 1-135. The rest of the data is used from the SE 2018 file (which includes the other counties).
+For the WFRC SE data files, data from Box Elder is only used for Zones 1-135. The rest of the data is used from the SE 2018 file (which includes the other counties, but excludes Box Elder).
 ```{r, message=FALSE, warning=FALSE}
 #wfrc Box Elder Se Data, extract needed rows
 SEWFBOX <- read_csv("inputs/SE_Box_Elder_2018.csv")
@@ -62,7 +62,7 @@ buildings <- read_csv("inputs/other/buildings.csv")
 parcels <- read_csv("inputs/other/parcels.csv")
   colnames(parcels)[2] <- "ZONE"
 
-#TAZ shapefile & urbanization data from WFRC
+#urbanization data from WFRC
 urban <- read_csv("inputs/other/urbanization.csv")
   colnames(urban)[2] <- "ZONE"  
 ```
@@ -97,12 +97,14 @@ TAZ <- tazgis %>%
 ### DISTRICT, SD, COUNTY
 The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-5: County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, County 4 being Utah, and County 5 being Box Elder. Notice that SD is a copy of the district category.
 
-Note: Some districts when computted were not found in the QGIS TAZ table and therefore they are resprested by the value of 0. If this causes problems in ActivitySim, assumptions about district values can be made. For now, we keep them 0.
+Note: Some districts when computed were not found in the QGIS TAZ table and therefore they were resprested by the value of 0. These 0s are filled in with the district number that they are most likely a part of (a copy of the one from the row above); doing this incase the value of 0 causes problem in ActivitySim. If there is a better approach to solving this, it should be implemented instead.
 
 ```{r}
 #use and select the district and county values found in the TAZ table
+#replace 0 values with likely district number based on county
 dc <- tazgis %>%
   mutate(
+    DISTLRG = ifelse(DISTLRG == 0 & COUNTY == 5, 1, ifelse(DISTLRG == 0 & COUNTY == 1, 3, ifelse (DISTLRG == 0 & COUNTY == 3, 12, ifelse(DISTLRG == 0 & COUNTY == 4, 17, DISTLRG)))),
     DISTRICT = DISTLRG,
     SD = DISTRICT
   ) %>%
@@ -111,6 +113,7 @@ dc <- tazgis %>%
 #update full table
 FullTable <- left_join(TAZ, dc, by = "ZONE", all = TRUE)
 ```
+
 
 ***
 ### TOTHH, HHPOP, TOTPOP
@@ -180,6 +183,8 @@ dwell <- units %>%
 FullTable <- left_join(FullTable, dwell, by = 'ZONE', all = TRUE)
 ```
 
+Note: The buildings and parcel datasets only have data starting from zone 128. This means that certain information (like SFDU and MFDU) in the final table will be missing in the Box Elder zones. 
+
 
 ***
 ### Income: HHINCQ1,	HHINCQ2,	HHINCQ3,	HHINCQ4
@@ -211,9 +216,9 @@ FullTable <- left_join(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
 
 ***
 ### TOTACRE,	RESACRE,	CIACRE
-The acre data comes from the buildings, parcels, and TAZ shapefile/urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only has a "Developed Acres" field, which is not specific enough to use for the residential and commercial acres fields. Therefore, calculations using the parcels and buildings data was used to get an estimate of the residential and commercial number of acres.
+The acre data comes from the buildings, parcels, and urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only has a "Developed Acres" field, which is not specific enough to use for the residential and commercial acres fields. Therefore, calculations using the parcels and buildings data was used to get an estimate of the residential and commercial number of acres.
 
-First the number of total acres is calculate easily. 
+First the number of total acres is calculated easily. 
 ```{r}
 #extract the total number of acres per Zone from the urban file.
 colnames(urban)[5] = "TOTACRE"
@@ -247,10 +252,12 @@ acres <- unit %>%
 FullTable <- left_join(FullTable, acres, by = 'ZONE', all = TRUE)
 ```
 
+Note: Similar to the columns SFDU and MFDU, because the buildings and parcel datasets are used, the Box Elder Zones are empty for the RESACRE and CIACRE fields. 
+
 
 ***
 ### TOTEMP
-The data for the TOTEMP category is a copy of the ALLEMP column from the 2018 SE WFRC Data. (ALLEMP was renamed to TOTEMP in Introduction)
+The data for the TOTEMP category is a copy of the ALLEMP column from the SE WFRC Data. (ALLEMP was renamed to TOTEMP in Introduction)
 
 ```{r}
 #create a variable to hold the Total employment column
@@ -261,7 +268,7 @@ TOTEMP <- SEWF %>%
 
 ***
 ### AGES: AGE0004,	AGE0519,	AGE2044,	AGE4564,	AGE65P
-The data for the age grouping columns are determined from the persons/population table within the synthetic population data. The persons are separated and totaled in specific age ranges.
+The data for the age grouping columns are determined from the persons/population table within the synthetic population data. The persons are separated and totaled into specific age ranges.
 
 ```{r}
 #create a table that has 5 columns that store the value of 1 for the matched age criteria
@@ -303,7 +310,7 @@ age2 <- ages %>%
   select(ZONE, SHPOP62P)
 ```
 
-It is important to update the table in the correct order, to match the order that ActivitySim desires. 
+It is important to update the table in the correct order, to match the order that ActivitySim needs. 
 
 ```{r}
 #update full table in the correct table order
@@ -315,7 +322,7 @@ FullTable <- left_join(FullTable, age1, by = 'ZONE', all = TRUE)
 
 ***
 ### EMPLOYMENT: RETEMPN,	FPSEMPN,	HEREMPN,	OTHEMPN,	AGREMPN,	MWTEMPN
-The employment data comes from using the 2018 SE WFRC data file. It is not a direct copy of the columns. To relate the columns, we need to understand the meaning of the employment columns from WFRC. The meaning of the headings are shown below: 
+The employment data comes from using the SE WFRC data file. It is not a direct copy of the columns. To relate the columns, we need to understand the meaning of the employment columns from WFRC. The meaning of the headings are shown below: 
 
 ```{r, message=FALSE}
 #display the employment key from wfrc
@@ -379,7 +386,7 @@ FullTable <- left_join(FullTable, area, by = 'ZONE', all = TRUE)
 
 ***
 ### HSENROLL
-The highschool enrollment data is copied from the 2018 SE WFRC data. 
+The highschool enrollment data is copied from the SE WFRC data. 
 
 ```{r}
 #create a variable to hold the high school column
@@ -422,6 +429,10 @@ coll <- colleges[!duplicated(colleges$ZONE), ]
 #update full table
 FullTable <- left_join(FullTable, coll, by = 'ZONE', all = TRUE)
 ```
+
+Note: The enrollment numbers for school data, both college and high school, is only represented in the TAZ that the school is located in. For example, if Weber High School has 1400 students and is located in TAZ ZONE 4, ZONE 4 would have a HSENROLL field of 1400. 
+
+If instead the number of students living within each TAZ is needed, then field calculations need to be changed accordingly (possibly by using the synthetic population persons data).
 
 
 ***
@@ -495,7 +506,7 @@ Other <- FullTable %>%
 
 ***
 ## Final Table
-The final table is the combination of all 42 column headers (described above), organized primarily by the socioeconomic data from the 2018 SE WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
+The final table is the combination of all 42 column headers (described above), organized primarily by the TAZ Zones found in the TAZ shapefile and socioeconomic data from the SE WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
 
 Note: Many cells display the value of "NA"; this is changed to the value of 0.
 
@@ -519,7 +530,7 @@ FinalTable <- FullTable %>%
 
 The Final Table can be seen in the paged table format below, or as a csv file. 
 ```{r}
-#write_csv(FinalTable, "SE_Data.csv")
+write_csv(FinalTable, "SE_Data.csv")
 paged_table(FinalTable)
 ```
 
