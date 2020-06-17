@@ -114,18 +114,18 @@ output_synthetic_population:
       - AGEP
       #- OSUTAG
       #- OCCP
-      #- DDRS
-      #- DEAR
-      #- DEYE
-      #- DOUT
-      #- DPHY
-      #- JWMNP
-      #- JWRIP
-      #- JWTR
+      - DDRS
+      - DEAR
+      - DEYE
+      - DOUT
+      - DPHY
+      - JWMNP
+      - JWRIP
+      - JWTR
       - SCH
       - SCHG
       - SEX
-      #- DIS
+      - DIS
       - INDP
       - OCCP
       - FDPHYP
