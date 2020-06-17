@@ -105,6 +105,7 @@ output_synthetic_population:
       - HHINCADJ
       #- NWESR
       - WIF
+      - HHT
   persons:
     filename: synthetic_persons.csv
     columns:
