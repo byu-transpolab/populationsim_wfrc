@@ -521,8 +521,8 @@ FullTable[is.na(FullTable)] <- 0
 It is important to determine the correct data type for each column header; data types for each column are described on the website found in the Introduction section. Most of the columns are represented as type integer.
 
 ```{r}
-#convert columns of the fulltable to the integer data type
-FullTable[,1:42] <- sapply(FullTable[,1:42], as.integer)
+#convert columns of the fulltable to the correct data type
+FullTable[,c(1:14,16:17,19:30,33,39:42)] <- sapply(FullTable[,c(1:14,16:17,19:30,33,39:42)], as.integer)
 ```
 
 The Final Table can be seen in the paged table format below, or as a csv file. 
