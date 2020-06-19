@@ -521,16 +521,13 @@ FullTable[is.na(FullTable)] <- 0
 It is important to determine the correct data type for each column header; data types for each column are described on the website found in the Introduction section. Most of the columns are represented as type integer.
 
 ```{r}
-#convert columns of the fulltable to the right data type
-FinalTable <- FullTable %>%
-  mutate(
-    ZONE = as.integer(ZONE), DISTRICT = as.integer(DISTRICT), SD = as.integer(SD), COUNTY = as.integer(COUNTY), TOTHH = as.integer(TOTHH), HHPOP = as.integer(HHPOP), TOTPOP = as.integer(TOTPOP), EMPRES = as.integer(EMPRES), SFDU = as.integer(SFDU), MFDU = as.integer(MFDU), HHINCQ1 = as.integer(HHINCQ1), HHINCQ2 = as.integer(HHINCQ2), HHINCQ3 = as.integer(HHINCQ3), HHINCQ4 = as.integer(HHINCQ4), RESACRE = as.integer(RESACRE), CIACRE = as.integer(CIACRE), TOTEMP = as.integer(TOTEMP), AGE0004 = as.integer(AGE0004), AGE0519 = as.integer(AGE0519), AGE2044 = as.integer(AGE2044), AGE4564 = as.integer(AGE4564), AGE65P = as.integer(AGE65P), RETEMPN = as.integer(RETEMPN), FPSEMPN = as.integer(FPSEMPN), HEREMPN = as.integer(HEREMPN), AGREMPN = as.integer(AGREMPN), MWTEMPN = as.integer(MWTEMPN), OTHEMPN = as.integer(OTHEMPN), area_type = as.integer(area_type), TOPOLOGY = as.integer(TOPOLOGY), ZERO = as.integer(ZERO), hhlds = as.integer(hhlds), sftaz = as.integer(sftaz), gqpop = as.integer(gqpop)
-  )
+#convert columns of the fulltable to the integer data type
+FullTable[,1:42] <- sapply(FullTable[,1:42], as.integer)
 ```
 
 The Final Table can be seen in the paged table format below, or as a csv file. 
 ```{r}
-write_csv(FinalTable, "SE_Data.csv")
-paged_table(FinalTable)
+write_csv(FullTable, "SE_Data.csv")
+paged_table(FullTable)
 ```
 
