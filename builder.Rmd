@@ -275,7 +275,7 @@ The uncompressed seed data is too large to commit, so we have committed
 compressed versions of the original files. We need to clean and re-save the PUMS
 seed data files for households and for people. In the case of households,
 this entails filtering the households without people, and replacing `NA` values
-in the controls with other values.
+in the controls with other values. These are the 2018 5-year PUMS files.
 
 ```{r pums_hh, message=FALSE}
 # read in pums HH file, specifying datatypes for key columns
