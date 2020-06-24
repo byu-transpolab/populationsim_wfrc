@@ -1,0 +1,32 @@
+---
+title: "Household Coordinates"
+author: "Chris Day"
+date: "6/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rmarkdown)
+library(sf)
+library(leaflet)
+library(leafsync)
+library(tidyverse)
+```
+
+
+## Introduction
+As a result of the synthetic population analysis, a certain number of households exist within each TAZ. Each one of those households were assigned the same position as the centroid of the TAZ in which they reside in. For exampe, if a TAZ were to have 2000 households, all 2000 would be located in the exact same spot. Of course this is unrealistic, and to help reduce further error in future analyses, new geographic coordinates will be assigned to each household id.
+
+### Parcel IDs
+The new coordinates for the households are based on the parcels within the same TAZ. The parcel datasets were found on AGRC (https://gis.utah.gov/data/cadastre/parcels/). All five counties of interest and their parcel information was then uploaded into QGIS, where they were joined and then their centroids were found. A joint analysis was run between the WFRC GIS TAZ file and the parcel centroids, creating a list of parcel coordninates at the TAZ level.
+
+```{r}
+#the datasets are read into the file
+house <- read_csv("output/synthetic_households.csv") 
+parcel <- read_csv("inputs/parcel2.csv")
+  colnames(parcel)[1] <- "TAZ"
+```
+
+### New Household Coordinates
+
