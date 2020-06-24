@@ -25,7 +25,7 @@ The new coordinates for the households are based on the parcels within the same 
 The coordinate system (CRS) that was used in the GIS calculation of the latitude and longitude points was WGS 84. Both the TAZ centroids and parcel centroids are in the same coordinate system.
 
 ```{r}
-#the datasets are read into the file
+#the synthetic population and parcel datasets are read into the file
 house <- read_csv("output/synthetic_households.csv") 
 parcel <- read_csv("inputs/parcel2.csv")
   colnames(parcel)[1] <- "TAZ"
@@ -41,17 +41,20 @@ tazcent <- read_csv("inputs/tazcentroids.csv") %>%
 Since there is no knowledge of the household location behond the TAZ in which they are located, a random parcel location within the same TAZ is assigned to each household. This is done using the index of the organized rows. 
 
 ```{r}
+#organize the household dataset by numbering each TAZ for each household using Index
 house2 <- house %>%
   arrange(TAZ) %>% 
   mutate(TAZ = as.character(TAZ)) %>% group_by(TAZ) %>%
   mutate(Index = 1:n(), index = as.character(Index), tazcom = paste(TAZ, index)) %>%
   select(tazcom, index, household_id)
 
+#organize the parcel dataset by numbering each TAZ for each parcel using Index
 parcel2 <- parcel %>%
   mutate(TAZ = as.character(TAZ)) %>% group_by(TAZ) %>%
   mutate(Index = 1:n(), index = as.character(Index), tazcom = paste(TAZ, index)) %>%
   select(tazcom, xcoord, ycoord)
 
+#join the parcel and house tables by the indexing of the TAZ, thus assigning coordinates to the households
 comb <- left_join(house2, parcel2, by = "tazcom") %>% select(TAZ.x, household_id, xcoord, ycoord)
   colnames(comb)[1] <- "TAZ"
 ```
@@ -61,11 +64,68 @@ There are around the same amount of total parcel ids as household ids, making su
 The table below shows the final result of the household coordinates in longitude and latitude.
 
 ```{r}
+#assign the NA household coordinates with the coordinates of the TAZ centroid
 hhcoord <- left_join(comb, tazcent, by = "TAZ") %>%
   mutate(
     longitude = ifelse(is.na(xcoord.x), xcoord.y, xcoord.x),
     latitude = ifelse(is.na(ycoord.x), ycoord.y, ycoord.x)) %>%
   select(TAZ, household_id, longitude, latitude)
 
+#display the final table
 paged_table(hhcoord)
 ```
+
+### Map Comparison
+Using the WFRC GIS TAZ file, we can display the poloygon of any TAZ we want on a map. Then, we can compare two maps: one with the position of the households before assigning parcel coordinates and one after assigning the parcel coordinates. 
+
+First we pick the TAZ we want to compare, as long as it exists within the sythetic population data. Most numbers under 2869 will work. 
+
+```{r}
+#pick the wanted taz id
+tazid <- "123"
+```
+
+Next we read in the TAZ GIS file and its centroid, the position of the old households.
+```{r}
+#read in the gis file for the taz polygons and centroids
+taz <- st_read("inputs/taz.geojson") %>% 
+  mutate(TAZ = as.character(TAZID)) %>%
+  # remove external stations
+  filter(CO_FIPS > 0) %>%
+  filter(TAZ == tazid) %>%
+  select(TAZ)
+tazc <- taz %>% select(TAZ) %>% st_centroid()
+```
+
+Then, using the new household coordinate table, we get the coordinates of the new household positions.
+```{r}
+#get coordinates for households
+parcelc <- hhcoord %>%
+  filter(TAZ == tazid) %>%
+  select(TAZ,household_id, longitude, latitude)
+```
+
+Finally, a comparison map can be seen. The left showing the household coordinates before this analysis, and the right showing the position of the households after this analysis.The positioning of the new coordinates for the households are clearly in more reasonable spots.
+
+```{r tazmap}
+#this map shows the taz polygon and its centroid
+map1 <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
+  addPolygons(data = taz, group = "TAZ") %>%
+  addCircleMarkers(data = tazc, group = "TAZC") %>%
+  addLayersControl(overlayGroups = c("TAZ", "TAZC"))
+
+#this map shows the household's new coordinates
+map2 <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldGrayCanvas) %>%
+  addPolygons(data = taz, group = "TAZ") %>%
+  addCircleMarkers(data = parcelc, group = "PARCELC") %>%
+  addLayersControl(overlayGroups = c("TAZ","PARCELC"))
+
+#show the maps synchronized
+sync(map1,map2)
+```
+
+
+
+
