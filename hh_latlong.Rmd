@@ -15,18 +15,57 @@ library(tidyverse)
 ```
 
 
-## Introduction
+### Introduction
 As a result of the synthetic population analysis, a certain number of households exist within each TAZ. Each one of those households were assigned the same position as the centroid of the TAZ in which they reside in. For exampe, if a TAZ were to have 2000 households, all 2000 would be located in the exact same spot. Of course this is unrealistic, and to help reduce further error in future analyses, new geographic coordinates will be assigned to each household id.
+
 
 ### Parcel IDs
 The new coordinates for the households are based on the parcels within the same TAZ. The parcel datasets were found on AGRC (https://gis.utah.gov/data/cadastre/parcels/). All five counties of interest and their parcel information was then uploaded into QGIS, where they were joined and then their centroids were found. A joint analysis was run between the WFRC GIS TAZ file and the parcel centroids, creating a list of parcel coordninates at the TAZ level.
+
+The coordinate system (CRS) that was used in the GIS calculation of the latitude and longitude points was WGS 84. Both the TAZ centroids and parcel centroids are in the same coordinate system.
 
 ```{r}
 #the datasets are read into the file
 house <- read_csv("output/synthetic_households.csv") 
 parcel <- read_csv("inputs/parcel2.csv")
   colnames(parcel)[1] <- "TAZ"
+  
+#read and filter the taz centroid dataset to be in the correct format
+tazcent <- read_csv("inputs/tazcentroids.csv") %>%
+  arrange(TAZID) %>%
+  filter(CO_FIPS > 0) %>%
+  mutate(TAZ = as.character(TAZID))
 ```
 
 ### New Household Coordinates
+Since there is no knowledge of the household location behond the TAZ in which they are located, a random parcel location within the same TAZ is assigned to each household. This is done using the index of the organized rows. 
 
+```{r}
+house2 <- house %>%
+  arrange(TAZ) %>% 
+  mutate(TAZ = as.character(TAZ)) %>% group_by(TAZ) %>%
+  mutate(Index = 1:n(), index = as.character(Index), tazcom = paste(TAZ, index)) %>%
+  select(tazcom, index, household_id)
+
+parcel2 <- parcel %>%
+  mutate(TAZ = as.character(TAZ)) %>% group_by(TAZ) %>%
+  mutate(Index = 1:n(), index = as.character(Index), tazcom = paste(TAZ, index)) %>%
+  select(tazcom, xcoord, ycoord)
+
+comb <- left_join(house2, parcel2, by = "tazcom") %>% select(TAZ.x, household_id, xcoord, ycoord)
+  colnames(comb)[1] <- "TAZ"
+```
+
+There are around the same amount of total parcel ids as household ids, making sure that most households are assigned new coordinates. In some cases though, there are more households than parcels in a certain TAZ, and in these cases the remaining household ids are given the TAZ centorid coordinates instead of repeating the use of parcel coordinates. 
+
+The table below shows the final result of the household coordinates in longitude and latitude.
+
+```{r}
+hhcoord <- left_join(comb, tazcent, by = "TAZ") %>%
+  mutate(
+    longitude = ifelse(is.na(xcoord.x), xcoord.y, xcoord.x),
+    latitude = ifelse(is.na(ycoord.x), ycoord.y, ycoord.x)) %>%
+  select(TAZ, household_id, longitude, latitude)
+
+paged_table(hhcoord)
+```
