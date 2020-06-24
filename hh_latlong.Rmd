@@ -12,6 +12,7 @@ library(sf)
 library(leaflet)
 library(leafsync)
 library(tidyverse)
+library(kableExtra)
 ```
 
 
@@ -24,7 +25,7 @@ The new coordinates for the households are based on the parcels within the same 
 
 The coordinate system (CRS) that was used in the GIS calculation of the latitude and longitude points was WGS 84. Both the TAZ centroids and parcel centroids are in the same coordinate system.
 
-```{r}
+```{r files}
 #the synthetic population and parcel datasets are read into the file
 house <- read_csv("output/synthetic_households.csv") 
 parcel <- read_csv("inputs/parcel2.csv")
@@ -40,7 +41,7 @@ tazcent <- read_csv("inputs/tazcentroids.csv") %>%
 ### New Household Coordinates
 Since there is no knowledge of the household location behond the TAZ in which they are located, a random parcel location within the same TAZ is assigned to each household. This is done using the index of the organized rows. 
 
-```{r}
+```{r table organization}
 #organize the household dataset by numbering each TAZ for each household using Index
 house2 <- house %>%
   arrange(TAZ) %>% 
@@ -61,11 +62,14 @@ comb <- left_join(house2, parcel2, by = "tazcom") %>% select(TAZ.x, household_id
 
 There are around the same amount of total parcel ids as household ids, making sure that most households are assigned new coordinates. In some cases though, there are more households than parcels in a certain TAZ, and in these cases the remaining household ids are given the TAZ centorid coordinates instead of repeating the use of parcel coordinates. 
 
+Note: An example of this is in TAZ 1231. More than half the households are still assigned the TAZ centroid coordinates. I am in the process of developing a while loop that will assign the remaining households a repeat of a parcel coordinate.
+
 The table below shows the final result of the household coordinates in longitude and latitude.
 
-```{r}
+```{r final table}
 #assign the NA household coordinates with the coordinates of the TAZ centroid
-hhcoord <- left_join(comb, tazcent, by = "TAZ") %>%
+hhcoord1 <- left_join(comb, tazcent, by = "TAZ") 
+hhcoord <- hhcoord1 %>%
   mutate(
     longitude = ifelse(is.na(xcoord.x), xcoord.y, xcoord.x),
     latitude = ifelse(is.na(ycoord.x), ycoord.y, ycoord.x)) %>%
@@ -80,32 +84,44 @@ Using the WFRC GIS TAZ file, we can display the poloygon of any TAZ we want on a
 
 First we pick the TAZ we want to compare, as long as it exists within the sythetic population data. Most numbers under 2869 will work. 
 
-```{r}
+Some good TAZ ids: 14-water,123-distribution, 141-large taz, 2445-lots of hhs, 1231-taz centroid overused
+
+```{r taz pick}
 #pick the wanted taz id
-tazid <- "123"
+tazid <- "14"
+
+#if a random taz is wanted
+#tazid <- as.character(floor(runif(1, min=0, max=2869)))
+#print(tazid)
 ```
 
 Next we read in the TAZ GIS file and its centroid, the position of the old households.
-```{r}
-#read in the gis file for the taz polygons and centroids
+```{r old coord}
+#read in the gis file for the taz polygons
 taz <- st_read("inputs/taz.geojson") %>% 
   mutate(TAZ = as.character(TAZID)) %>%
-  # remove external stations
   filter(CO_FIPS > 0) %>%
   filter(TAZ == tazid) %>%
   select(TAZ)
-tazc <- taz %>% select(TAZ) %>% st_centroid()
+
+#store the coordinates of the taz centroid based households
+tazc <- hhcoord1 %>%
+  filter(TAZ == tazid) %>%
+  select(TAZ, household_id, xcoord.y, ycoord.y)
+colnames(tazc)[3] = ("longitude")
+colnames(tazc)[4] = ("latitude")
+  
 ```
 
 Then, using the new household coordinate table, we get the coordinates of the new household positions.
-```{r}
+```{r new coord}
 #get coordinates for households
 parcelc <- hhcoord %>%
   filter(TAZ == tazid) %>%
   select(TAZ,household_id, longitude, latitude)
 ```
 
-Finally, a comparison map can be seen. The left showing the household coordinates before this analysis, and the right showing the position of the households after this analysis.The positioning of the new coordinates for the households are clearly in more reasonable spots.
+Finally, a comparison map can be seen. The left showing the household coordinates before this analysis, and the right showing the position of the households after this analysis.The positioning of the new coordinates for the households are clearly in more reasonable spots. Also, the table below each map shows the exact coordinates of each household.
 
 ```{r tazmap}
 #this map shows the taz polygon and its centroid
@@ -126,6 +142,10 @@ map2 <- leaflet() %>%
 sync(map1,map2)
 ```
 
-
-
-
+```{r table, echo = FALSE}
+#display the table side by side
+kable(tazc) %>%
+  kable_styling(full_width = FALSE, position = "float_left")
+kable(parcelc) %>%
+  kable_styling(full_width = FALSE, position = "right")
+```
