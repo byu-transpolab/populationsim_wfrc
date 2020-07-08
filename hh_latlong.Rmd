@@ -32,14 +32,46 @@ parcel <- read_csv("inputs/parcel2.csv")
   colnames(parcel)[1] <- "TAZ"
   
 #read and filter the taz centroid dataset to be in the correct format
-tazcent <- read_csv("inputs/tazcentroids.csv") %>%
+tazc <- read_csv("inputs/tazcentroids.csv") %>%
   arrange(TAZID) %>%
   filter(CO_FIPS > 0) %>%
   mutate(TAZ = as.character(TAZID))
+colnames(tazc)[3] = ("longitude")
+colnames(tazc)[4] = ("latitude")
 ```
 
 ### New Household Coordinates
-Since there is no knowledge of the household location behond the TAZ in which they are located, a random parcel location within the same TAZ is assigned to each household. This is done using the index of the organized rows. 
+Since there is no knowledge of the household location behond the TAZ in which they are located, a random parcel location within the same TAZ is assigned to each household. Many times, the same parcel id is used amoung multiple household ids. 
+
+In order to accomplish this, first the total number of households in each TAZ is determined.
+```{r}
+tothh <-house %>%
+  arrange(TAZ) %>% mutate(tot_hh = 1) %>% select(TAZ, tot_hh)%>%
+  group_by(TAZ) %>% summarize_all("sum")
+p <- data.frame(TAZ = (1:2881))  
+
+tothh <- left_join(p, tothh, by = "TAZ") 
+tothh[is.na(tothh)] <- 0
+```
+
+Then, by spliting up the parcel table into separte vectors for each TAZ, and using a loop, a set of coordinates for the right amount of households per TAZ can be determined.
+```{r}
+parcel <- parcel %>% arrange(TAZ) %>% select(TAZ, xcoord, ycoord)
+splitt <- split(parcel,parcel$TAZ)
+
+i = 1
+while (i <= 2881){
+  n = tothh[i,2]
+  testsam <- sample_n(splitt[[i]], n, replace = TRUE)
+  ifelse(i == 1, join <- sample_n(splitt[[1]], n, replace = TRUE),   join <- rbind(join, testsam))
+  i = i + 1
+}
+colnames(join)[2] <- "longitude"
+colnames(join)[3] <- "latitude"
+```
+
+#### Joining Tables
+In order to combine the parcel coordinates dataset created in the previous step with the household dataset, a lot of memory is required. For some reason, by turning the TAZ values into a string and joining them based on their index, it easier to merge the two tables. 
 
 ```{r table organization}
 #organize the household dataset by numbering each TAZ for each household using Index
@@ -88,7 +120,7 @@ Some good TAZ ids: 14-water,123-distribution, 141-large taz, 2445-lots of hhs, 1
 
 ```{r taz pick}
 #pick the wanted taz id
-tazid <- "14"
+tazid <- "1447"
 
 #if a random taz is wanted
 #tazid <- as.character(floor(runif(1, min=0, max=2869)))
