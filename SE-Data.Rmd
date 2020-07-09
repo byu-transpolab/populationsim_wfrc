@@ -1,0 +1,533 @@
+---
+title: "SE Data"
+author: "Chris Day"
+date: "5/14/2020"
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(rmarkdown)
+library(tidyverse)
+library(knitr)
+```
+
+***
+## Introduction
+The ActivitySim Model requires an input of specific socioeconomic (SE) data for certain counties in the Wasatch Front (Box Elder, Weber, Davis, Salt Lake, Utah). This data can also be classified as landuse data. This document explains what data is needed, where the data comes from, and how the data is changed into the correct format in order to be processed.
+
+The socioeconomic file requires 42 different inputs which can be described as different column headings. These headings are copied directly from the ActivitySim Example's input file. The headings are the following:  
+
+> ##### ZONE, DISTRICT, SD, COUNTY, TOTHH, HHPOP, TOTPOP, EMPRES, SFDU, MFDU, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4, TOTACRE, RESACRE, CIACRE, SHPOP62P, TOTEMP, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN, PRKCST, OPRKCST, area_type, HSENROLL, COLLFTE, COLLPTE, TOPOLOGY, TERMINAL, ZERO, hhlds, sftaz, gqpop
+
+The describtion for each column heading can be found at this link: https://github.com/BayAreaMetro/modeling-website/wiki/TazData
+
+The next section describes the data input sources, and then the rest of the page describes how each of the 42 sections are calculated using the data sources. A final table is created at the end. Specifically, the final results are presented as a csv file named SE_Data.csv.
+
+***
+### Data Sources
+In order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data files, the synthetic population files, the buildings, parcel, and urbanization datasets from WFRC, the TAZ shapefile data, topology data from the AGRC website joint with the TAZ shapefile, and school data from the AGRC website joint with the TAZ shapefile.
+
+For the WFRC SE data files, data from Box Elder is only used for Zones 1-135. The rest of the data is used from the SE 2018 file (which includes the other counties, but excludes Box Elder).
+```{r, message=FALSE, warning=FALSE}
+#wfrc Box Elder Se Data, extract needed rows
+SEWFBOX <- read_csv("inputs/SE_Box_Elder_2018.csv")
+  colnames(SEWFBOX)[1] <- "ZONE"
+  colnames(SEWFBOX)[6] <- "TOTEMP"
+  colnames(SEWFBOX)[22] <- "HSENROLL"
+SEWFBOX <- SEWFBOX[303:437,]
+
+#wfrc se data from 2018
+SEWF18 <- read_csv("inputs/SE_WF_2018.csv")
+  colnames(SEWF18)[1] <- "ZONE"
+  colnames(SEWF18)[6] <- "TOTEMP"
+  colnames(SEWF18)[22] <- "HSENROLL"
+
+SEWF <- rbind(SEWFBOX,SEWF18)
+```
+
+The synthetic population files are used for households and persons data. WFRC provided data on buidings, parcels, and urbanization as well.
+```{r, message=FALSE, warning=FALSE}
+#synpop household data
+hsyn = read_csv("output/synthetic_households.csv")
+  colnames(hsyn)[4] <- "ZONE"
+  
+#synpop population/persons data
+psyn = read_csv("output/synthetic_persons.csv")
+  colnames(psyn)[3] <- "ZONE"
+  
+#buildings data from WFRC
+buildings <- read_csv("inputs/other/buildings.csv")
+
+#parcel data from WFRC
+parcels <- read_csv("inputs/other/parcels.csv")
+  colnames(parcels)[2] <- "ZONE"
+
+#urbanization data from WFRC
+urban <- read_csv("inputs/other/urbanization.csv")
+  colnames(urban)[2] <- "ZONE"  
+```
+
+The TAZ shapefile data (found in the inputs folder as a .geojson file) is used primary for the total zones, topology data, and school data.
+```{r, message=FALSE, warning=FALSE}
+#TAZ shapefile data
+tazgis <- read_csv("inputs/other/TazQGIS.csv")
+  colnames(tazgis)[1] <- "ZONE"
+  
+#topology data using TAZ  and contour shapefiles 
+topo <- read_csv("inputs/other/topology.csv")
+
+#school data using TAZ and school shapefiles
+schools <- read_csv("inputs/other/schools.csv")
+  colnames(schools)[1] <- "ZONE"
+```
+
+
+***
+### ZONE
+The Zone data is a list of all the TAZs. This list is copied from the TAZ shapefile attribute table.
+
+```{r, layout = "1-body-outset", message=FALSE, warning=FALSE}
+#create a variable to hold the TAZ/Zone column
+TAZ <- tazgis %>%
+  select(ZONE)
+```
+
+
+***
+### DISTRICT, SD, COUNTY
+The district and county information is determined using the data found from the TAZ shapefile. Specifically, the disctrict information comes from the DISTLRG column. The districts are numbered from 1-17, and the counties are numbered 1-5: County 1 being Weber, County 2 being Davis, County 3 being Salt Lake, County 4 being Utah, and County 5 being Box Elder. Notice that SD is a copy of the district category.
+
+Note: Some districts when computed were not found in the QGIS TAZ table and therefore they were resprested by the value of 0. These 0s are filled in with the district number that they are most likely a part of (a copy of the one from the row above); doing this incase the value of 0 causes problem in ActivitySim. If there is a better approach to solving this, it should be implemented instead.
+
+```{r}
+#use and select the district and county values found in the TAZ table
+#replace 0 values with likely district number based on county
+dc <- tazgis %>%
+  mutate(
+    DISTLRG = ifelse(DISTLRG == 0 & COUNTY == 5, 1, ifelse(DISTLRG == 0 & COUNTY == 1, 3, ifelse (DISTLRG == 0 & COUNTY == 3, 12, ifelse(DISTLRG == 0 & COUNTY == 4, 17, DISTLRG)))),
+    DISTRICT = DISTLRG,
+    SD = DISTRICT
+  ) %>%
+  select(ZONE, DISTRICT, SD, COUNTY)
+
+#update full table
+FullTable <- left_join(TAZ, dc, by = "ZONE", all = TRUE)
+```
+
+
+***
+### TOTHH, HHPOP, TOTPOP
+The total household (TOTHH) and total population (TOTPOP) data comes from the 2018 SE WFRC data. Household population (HHPOP) is a funciton of household size (HHSIZE), which is also found in the same data set. 
+
+```{r}
+#create a table of the household and total population data from the wfrc data
+HH <- SEWF %>%
+  mutate(HHPOP = TOTHH * HHSIZE) %>%
+  select(ZONE, TOTHH, HHPOP, TOTPOP)
+
+#update full table
+FullTable <- left_join(FullTable, HH, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### EMPRES
+The number of employed residents is determined by the data in the synthetic population persons file. If the COW (class of worker) categoty isn't empty, then the person is assumed to be employed. 
+
+```{r}
+#create a table that determines the number of employed residents in each ZONE
+workerbee <- psyn %>%
+  mutate(
+    EMPRES = ifelse(COW %in% 1:9, 1, 0)
+  ) %>%
+  select(ZONE, EMPRES) %>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- left_join(FullTable, workerbee, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### SFDU, MFDU
+To find data on single family and multi family dwelling units, data from the buildings and parcel datasets from WFRC must be used. To interpret the building type from the buildings dataset the following key can be used as well.
+
+| building_type_id | Building Type                          |
+| ---------------- | -------------------------------------- |
+| 1                | Single Family Residential              |
+| 2                | Multi Family Residential               |
+| 3                | Industrial, Warehouse, & Storage       |
+| 4                | Retail                                 |
+| 5                | Office                                 |
+| 6                | Government & Education                 |
+| 7                | Mixed Use                              |
+| 8                | Other                                  |
+
+We only want the single family and multi family information from the buildings file. 
+```{r}
+#merge tables by parcel id to compare buildings data with the Zone
+units <- merge(buildings, parcels, by = 'parcel_id')
+
+#create a table that determines the number of single and multi family units in each Zone
+dwell <- units %>%
+  mutate(
+    SFDU = ifelse(building_type_id == 1, residential_units, 0),
+    MFDU = ifelse(building_type_id == 2, residential_units, 0)
+  ) %>% 
+  select(ZONE, SFDU, MFDU) %>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- left_join(FullTable, dwell, by = 'ZONE', all = TRUE)
+```
+
+Note: The buildings and parcel datasets only have data starting from zone 128. This means that certain information (like SFDU and MFDU) in the final table will be missing in the Box Elder zones. 
+
+
+***
+### Income: HHINCQ1,	HHINCQ2,	HHINCQ3,	HHINCQ4
+The income data is separated into 4 variables, each representing a different range of household income per year. This data is extracted from the synthetic population household data. That household data shows income to the factor of 10^6, so that is taken into account.  
+
+```{r}
+#create a table with columns representing the household income for each category
+#assign the value of 1 if the criteria for the column is met
+HouseIncome <- hsyn %>%
+  mutate(
+    inc = HHINCADJ/(10^6),
+    money = ifelse(inc < 30000, 1, ifelse(inc >= 30000 & inc < 60000, 2, 
+            ifelse(inc >= 60000 & inc < 100000, 3, 4))),
+    HHINCQ1 = ifelse(money == 1, 1, 0),
+    HHINCQ2 = ifelse(money == 2, 1, 0),
+    HHINCQ3 = ifelse(money == 3, 1, 0),
+    HHINCQ4 = ifelse(money == 4, 1, 0)
+   ) %>%
+  select(ZONE, HHINCQ1, HHINCQ2, HHINCQ3, HHINCQ4) %>%
+  
+  #group the data by ZONE and sum all the values to get the total counts for each ZONE
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- left_join(FullTable, HouseIncome, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### TOTACRE,	RESACRE,	CIACRE
+The acre data comes from the buildings, parcels, and urbanization data from WFRC. The total number of acres comes from the urbanization file. Other than the total number of acres, the urbanization file only has a "Developed Acres" field, which is not specific enough to use for the residential and commercial acres fields. Therefore, calculations using the parcels and buildings data was used to get an estimate of the residential and commercial number of acres.
+
+First the number of total acres is calculated easily. 
+```{r}
+#extract the total number of acres per Zone from the urban file.
+colnames(urban)[5] = "TOTACRE"
+totacre <- urban %>%
+  select(ZONE, TOTACRE)
+
+#update full table
+FullTable <- left_join(FullTable, totacre, by = 'ZONE', all = TRUE)
+```
+
+Next, we use the building and parcel datasets to determine residential and commercial acre amounts per Zone based on Building Type (see table under SFDU, MFDU category for details on Building Type).
+
+```{r}
+# merge tables by parcel id to compare buildings data with the Zone
+unit <- merge(buildings, parcels, by = 'parcel_id')
+
+# create a table that sums up the residedntial and commercial acres in each Zone
+acres <- unit %>%
+  mutate(
+    RESACRE = ifelse(building_type_id == 1, parcel_acres, 
+                ifelse(building_type_id == 2, parcel_acres, 0)),
+    CIACRE = ifelse(building_type_id == 3, parcel_acres, 
+                ifelse(building_type_id == 4, parcel_acres, 
+                ifelse(building_type_id == 5, parcel_acres, 0)))
+  ) %>% 
+  select(ZONE, RESACRE, CIACRE)%>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#update full table
+FullTable <- left_join(FullTable, acres, by = 'ZONE', all = TRUE)
+```
+
+Note: Similar to the columns SFDU and MFDU, because the buildings and parcel datasets are used, the Box Elder Zones are empty for the RESACRE and CIACRE fields. 
+
+
+***
+### TOTEMP
+The data for the TOTEMP category is a copy of the ALLEMP column from the SE WFRC Data. (ALLEMP was renamed to TOTEMP in Introduction)
+
+```{r}
+#create a variable to hold the Total employment column
+TOTEMP <- SEWF %>%
+  select(ZONE, TOTEMP)
+```
+
+
+***
+### AGES: AGE0004,	AGE0519,	AGE2044,	AGE4564,	AGE65P
+The data for the age grouping columns are determined from the persons/population table within the synthetic population data. The persons are separated and totaled into specific age ranges.
+
+```{r}
+#create a table that has 5 columns that store the value of 1 for the matched age criteria
+AgeGroups <- psyn %>%
+  mutate(
+    AGE = ifelse(AGEP %in% 0:4, 1, ifelse(AGEP %in% 5:19,2,
+          ifelse(AGEP %in% 20:44, 3, ifelse(AGEP %in% 45:64, 4, 5)))),
+    AGE2 = ifelse(AGEP >= 62, 1, 0),
+    AGE0004 = ifelse(AGE == 1, 1,0),
+    AGE0519 = ifelse(AGE == 2, 1,0),
+    AGE2044 = ifelse(AGE == 3, 1,0),
+    AGE4564 = ifelse(AGE == 4, 1,0),
+    AGE65P = ifelse(AGE == 5, 1,0),
+    AGE62P = ifelse(AGE2 == 1, 1,0)
+  )
+ 
+#select the right columns, group the data by Zone, and sum all the values to get the total counts for each Zone
+ages <- AgeGroups %>% 
+  select(ZONE, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P, AGE62P) %>%
+  group_by(ZONE) %>%
+  summarize_all("sum")
+
+#create a table for certain age groups
+age1 <- ages %>%
+  select(ZONE, AGE0004, AGE0519, AGE2044, AGE4564, AGE65P)
+```
+
+
+***
+### SHPOP62P
+The SHPOP62P category is determined from the sythetic popoulation persons data as well. It takes into account the total population, which is determined by summing up all of the age groups instead of using the TOTPOP field. 
+
+```{r}
+#create a table for the 62+ age group data
+age2 <- ages %>%
+  mutate(
+    SHPOP62P = AGE62P/(AGE0004+AGE0519+AGE2044+AGE4564+AGE65P)
+  )%>%
+  select(ZONE, SHPOP62P)
+```
+
+It is important to update the table in the correct order, to match the order that ActivitySim needs. 
+
+```{r}
+#update full table in the correct table order
+FullTable <- left_join(FullTable, age2, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, TOTEMP, by = 'ZONE', all = TRUE)
+FullTable <- left_join(FullTable, age1, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### EMPLOYMENT: RETEMPN,	FPSEMPN,	HEREMPN,	OTHEMPN,	AGREMPN,	MWTEMPN
+The employment data comes from using the SE WFRC data file. It is not a direct copy of the columns. To relate the columns, we need to understand the meaning of the employment columns from WFRC. The meaning of the headings are shown below: 
+
+```{r, message=FALSE}
+#display the employment key from wfrc
+empkey = read_csv("inputs/other/EMP_Key.csv")
+kable(empkey)
+```
+
+The code explains how the required employment data is calculated. (Note: These are based off of the NAICS-Based Employment Categories in MTC Data Inputs Table from the mtc_tm1_documentation.pdf found in the Box account, wav_simulation folder).
+
+```{r}
+#create a table with new employment columns, based on the WFRC ones
+#select the ones we want to use
+Employment <- SEWF %>%
+  mutate(
+    RETEMPN = RETL,
+    FPSEMPN = OFFI,
+    HEREMPN = HLTH + GVED + FOOD,
+    OTHEMPN = OTHR + HBJ + FM_CONS,
+    AGREMPN = FM_AGRI + FM_MING,
+    MWTEMPN = MANU + WSLE
+  ) %>%
+  select(ZONE, RETEMPN, FPSEMPN, HEREMPN, OTHEMPN, AGREMPN, MWTEMPN)
+
+#update full table
+FullTable <- left_join(FullTable, Employment, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### PRKCST, OPRKCST
+Long term (PRKCST) and short term (OPRKCST) parking rates are found in the WFRC urbanization data file. Techinaclly the long term parking field needed is for parking of 8 hours or more, but we will use permanent parking rates from the urbanization file instead. We will use temporary parking rates for the short term parking field as well. 
+
+```{r}
+#create a table with new parking rates (in cents)
+parking <- urban %>%
+  mutate(
+    PRKCST = PRKCSTPERM * 100,
+    OPRKCST = PRKCSTTEMP * 100
+  ) %>%
+  select(ZONE, PRKCST, OPRKCST)
+  
+#update full table
+FullTable <- left_join(FullTable, parking, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### area_type
+The area type of each Zone is described on the website described in the Introduction and is found from the WFRC urbanization data. 
+
+```{r}
+#select the area type column variable from the urbanization file
+colnames(urban)[15] = "area_type"
+area <- urban %>%
+  select(ZONE, area_type)
+
+#update full table
+FullTable <- left_join(FullTable, area, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### HSENROLL
+The highschool enrollment data is copied from the SE WFRC data. 
+
+```{r}
+#create a variable to hold the high school column
+HS <- SEWF %>%
+  select(ZONE, HSENROLL)
+
+#update full table
+FullTable <- left_join(FullTable, HS, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### COLLFTE, COLLPTE
+College data was determined from a variety of sources. First, a joined table using the TAZ shapefile and a schools shapefile from the AGRC website was made on QGIS. The website of the schools shapefile is found here:
+
+https://gis.utah.gov/data/society/schools-libraries/
+
+This table was then edited to include information from the web on full time and part time enrollments for many of the "Higher Education" schools listed. The websites for these can be seen in the data source column of that table. Some data wasn't found on the web, so data from WFRC's college information was used. The WFRC information is shown in the table below: 
+
+```{r, message=FALSE}
+#display the WFRC College information
+scho = read_csv("inputs/other/schools_wfrc.csv")
+paged_table(scho)
+```
+
+WFRC only had information on total enrolled students, so part time students for these colleges is represented as 0, even if that is not necessarily true. This is why data from the web was prioritized over the WFRC information (it had part time student data). Also, not all the "Higher Education" schools from the table have completed information; a deeper search on the web could find these potential numbers. The majority of the colleges have information though, and so we use the data that we do have.  
+
+```{r}
+#sort the TAZ/Schools data table to the information wanted
+colleges <- schools %>%
+  mutate(
+    COLLFTE = ifelse(EDTYPE == "Higher Education", ENROLL_FT, 0),
+    COLLPTE = ifelse(EDTYPE == "Higher Education", ENROLL_PT, 0)
+  ) %>%
+  select(ZONE, COLLFTE, COLLPTE) 
+
+#delete duplicated Zones
+coll <- colleges[!duplicated(colleges$ZONE), ]
+
+#update full table
+FullTable <- left_join(FullTable, coll, by = 'ZONE', all = TRUE)
+```
+
+Note: The enrollment numbers for school data, both college and high school, is only represented in the TAZ that the school is located in. For example, if Weber High School has 1400 students and is located in TAZ ZONE 4, ZONE 4 would have a HSENROLL field of 1400. 
+
+If instead the number of students living within each TAZ is needed, then field calculations need to be changed accordingly (possibly by using the synthetic population persons data).
+
+
+***
+### TOPOLOGY
+Utah topology information comes from the AGRC website. Elevations for each Zone was found by joining the utah elevation shapefile, located on the website, with the TAZ shapefile within QGIS.
+
+https://gis.utah.gov/data/elevation-and-terrain/contours/
+
+(Note: This elevation shapefile measures elevations in multiples of 200 ft)
+
+A table was made from joining the TAZ and Contour shapefiles, and the various elevations for each range are displayed within the table. The table below shows the relationship between the difference in elevation in regards to its steepness.  
+
+| Change in Elevation (ft) | Topology/Steepness |
+| ------------------------ | ------------------ |
+| 0                        | 1 - Flat           |
+| < 600                    | 2 - In Between     |
+| >= 600                   | 3 - Steep          |
+
+Note: I decided that  a change of 600ft or more in elevation is steep, so if that is incorrect, it must be changed.
+
+```{r, message=FALSE}
+#determine the steepness based on the change in elevation for each Zone
+steepy <- topo %>%
+  select(ZONE, ContourEle) %>%
+  group_by(ZONE) %>%
+  summarize(
+    mi = min(ContourEle),
+    ma = max(ContourEle)
+  ) %>%
+  mutate(
+    TOPOLOGY = ifelse((ma -mi) == 0, 1, ifelse((ma - mi) < 600, 2, 3))
+  ) %>%
+  select(ZONE, TOPOLOGY)
+
+#update full table
+FullTable <- left_join(FullTable, steepy, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### TERMINAL
+The terminal time for each zone is an estimate taken from WFRC. (We are using their estimations instead of making up our own). Most of them are between 1 and 2 minutes. This makes sense as many of the TAZs are roughly a similar size in area, that area not being too large.  
+
+```{r}
+# create a variable to hold the terminal information from the urbanization file
+colnames(urban)[16] = "TERMINAL"
+term <- urban %>%
+  select(ZONE, TERMINAL)
+
+#update full table
+FullTable <- left_join(FullTable, term, by = 'ZONE', all = TRUE)
+```
+
+
+***
+### Other: ZERO, hhlds, sftaz, gqpop
+The last columns needed for the input columns are either repeats or easy to calculate.
+
+```{r}
+#create a table to hold the remaining columns after calculating them
+Other <- FullTable %>%
+  mutate(
+    ZERO = 0,
+    hhlds = TOTHH,
+    sftaz = ZONE,
+    gqpop = TOTPOP - HHPOP
+  ) %>%
+  select(ZONE, ZERO, hhlds, sftaz, gqpop)
+```
+
+
+***
+## Final Table
+The final table is the combination of all 42 column headers (described above), organized primarily by the TAZ Zones found in the TAZ shapefile and socioeconomic data from the SE WFRC file. This table will be used as one of the primary inputs for the ActivitySim model. 
+
+Note: Many cells display the value of "NA"; this is changed to the value of 0.
+
+```{r}
+#create a table holding all 42 column values needed, organized primarily by the socioeconomic data from WFRC
+FullTable <- left_join(FullTable, Other, by = 'ZONE', all = TRUE)
+
+#replace all "NA" values with 0
+FullTable[is.na(FullTable)] <- 0
+```
+
+It is important to determine the correct data type for each column header; data types for each column are described on the website found in the Introduction section. Most of the columns are represented as type integer.
+
+```{r}
+#convert columns of the fulltable to the correct data type
+FullTable[,c(1:14,16:17,19:30,33,39:42)] <- sapply(FullTable[,c(1:14,16:17,19:30,33,39:42)], as.integer)
+```
+
+The Final Table can be seen in the paged table format below, or as a csv file. 
+```{r}
+write_csv(FullTable, "SE_Data.csv")
+paged_table(FullTable)
+```
+
