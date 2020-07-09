@@ -25,7 +25,7 @@ The next section describes the data input sources, and then the rest of the page
 
 ***
 ### Data Sources
-In order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data files, the synthetic population files, the buildings, parcel, and urbanization datasets from WFRC, the TAZ shapefile data, topology data from the AGRC website joint with the TAZ shapefile, and school data from the AGRC website joint with the TAZ shapefile.
+In order to put together all 42 columns of input data, the data must be collected from various sources. The data sources are as follows: the 2018 SE WFRC data files, the synthetic population files, the buildings, parcel, and urbanization datasets from WFRC, the TAZ shapefile data, and lastly the topology data, box elder parcel data, and school data all from the AGRC website joint with the TAZ shapefile.
 
 For the WFRC SE data files, data from Box Elder is only used for Zones 1-135. The rest of the data is used from the SE 2018 file (which includes the other counties, but excludes Box Elder).
 ```{r, message=FALSE, warning=FALSE}
@@ -61,6 +61,10 @@ buildings <- read_csv("inputs/other/buildings.csv")
 #parcel data from WFRC
 parcels <- read_csv("inputs/other/parcels.csv")
   colnames(parcels)[2] <- "ZONE"
+  
+#box elder parcel data from AGRC
+parcels_be <- read_csv("inputs/other/parcels_BoxElder.csv")
+  colnames(parcels_be)[1] <- "ZONE"
 
 #urbanization data from WFRC
 urban <- read_csv("inputs/other/urbanization.csv")
@@ -247,12 +251,32 @@ acres <- unit %>%
   select(ZONE, RESACRE, CIACRE)%>%
   group_by(ZONE) %>%
   summarize_all("sum")
-
-#update full table
-FullTable <- left_join(FullTable, acres, by = 'ZONE', all = TRUE)
 ```
 
-Note: Similar to the columns SFDU and MFDU, because the buildings and parcel datasets are used, the Box Elder Zones are empty for the RESACRE and CIACRE fields. 
+The residential and commercial acres for the Box Elder county was not included in the WFRC parcels dataset, so this data was determined from another source and by assumption. The RESACRE field was determined from a parcel dataset from AGRC joint with the WFRC TAZ shapefile. 
+
+https://gis.utah.gov/data/cadastre/parcels/
+
+The Box Elder RESACRE field is the total number of private acres per TAZ from the joint data. The Box Elder CIACRE field is just assumed to be 11% of the TOTACRE field (average of all the other CIACRE field values), since it isn't included in the joint data calculated.
+
+```{r}
+#calculate Box Elder residential acres
+beres <- parcels_be %>%
+  mutate(RESACRE = ifelse(OWN_TYPE == "Private", ACRES,0))%>%
+  select(ZONE,RESACRE) %>% group_by(ZONE) %>% summarize_all("sum")
+
+#calculate Box Elder commercial acres
+becity <- totacre %>%
+  filter(ZONE < 141) %>% mutate(CIACRE = .11 * TOTACRE) %>% 
+  select(ZONE, CIACRE, TOTACRE)
+
+#compute a table of the box elder acre data and all the zones' acre data
+beacres <- left_join(beres,becity, by = "ZONE") %>% mutate(RESACRE = ifelse(TOTACRE == 0, 0, RESACRE)) %>% select(ZONE, RESACRE, CIACRE)
+allacres <- rbind(beacres, acres)
+
+#update full table
+FullTable <- left_join(FullTable, allacres, by = 'ZONE', all = TRUE)
+```
 
 
 ***
