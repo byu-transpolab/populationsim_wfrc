@@ -57,7 +57,10 @@ tr <- tracts("UT", county = unique(substr(puma_tract$TRACT, 3, 5)),
 
 The last step we need is the list of TAZs that intersect with these tracts. We
 use a TAZ file obtained from the Mountainland Association of Government travel 
-model. We filter the tracts based on whether they intersect.
+model. We filter the tracts based on whether they intersect.Additionally, we must 
+remove TAZs where the MAG mode choice skims give the travel time to all other 
+TAZs as zero. Otherwise, our ActivitySim model is unable to calculate logsums. 
+When the MAG skim value are fixed, we will include these TAZS in the model again.
 
 ```{r taz}
 taz <- st_read("inputs/taz.geojson") %>% 
@@ -71,6 +74,12 @@ taz <- st_read("inputs/taz.geojson") %>%
   
   # remove duplicates of TAZ that map to many tracts
   group_by(TAZ) %>% slice(1) %>% ungroup()
+
+# remove TAZs with IVT = 0
+IVT0 <- read_csv("inputs/IVT0_tazs.csv")
+IVT0$TAZ <- as.character(IVT0$TAZ)
+taz <- taz %>% 
+  filter(!TAZ %in% IVT0$TAZ)
 ```
 
 The map below shows the TAZ and Tract boundaries for our controls. 
@@ -127,7 +136,7 @@ TAZ. Therefore, this will be the only control in this file. The MAG data is only
 available for 2020, so that's what we will be using even if 2017 or 2018 might
 be more appropriate. We filter the list of controls to the TAZ that we are
 getting in the crosswalk. We need to ensure that the TAZ code is a character
-string and the household target is an integer.
+string and the household target is an integer. 
 
 ```{r taz_control}
 # read socioeconomic data file
