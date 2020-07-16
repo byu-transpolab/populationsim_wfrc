@@ -118,7 +118,7 @@ Some good TAZ ids: 14-water,123-distribution, 141-large taz, 2445-lots of hhs, 1
 
 ```{r taz pick}
 #pick the wanted taz id
-tazid <- "535"
+tazid <- "14"
 
 #if a random taz is wanted
 #tazid <- as.character(floor(runif(1, min=0, max=2869)))
