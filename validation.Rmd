@@ -10,22 +10,22 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 library(sf)
 library(tidyverse)
 library(reshape2)
+library(tidycensus)
+library(tigris)
 options(readr.show_progress = FALSE)
 ```
 
 ## Error Map
-
 The synthetic population created using PopultionSim and the WFRC model has a slight discrepancy between in the household controls at the tract level. The controls for total households are at the TAZ level while the controls for household size (1 person, 2 people, etc.) are at the census tract level. During the creation of the synthetic population, PopulationSim creates a total household control at the tract level that is greater than the sum of the individual household size controls. To see if there was any geographic trend in this error, a map of the difference between these two values was created.
 
-
 ```{r hh_error}
-tract_sum <- read_csv("output/summary_TRACT.csv")
+tract_sum <- read_csv("output/final_summary_TRACT.csv")
 hherror <- tract_sum %>% 
   select(1:7)
 hherror$err <- (tract_sum$num_hh_control - tract_sum$hh_size_1_control - tract_sum$hh_size_2_control
                             - tract_sum$hh_size_3_control - tract_sum$hh_size_4_plus_control)
 
-#Import tract data
+##Import tract data (run builder.Rmd first)
 tr <- tracts("UT", county = unique(substr(puma_tract$TRACT, 3, 5)), 
              class = "sf", progress_bar = FALSE) %>%
   st_transform(4326)
@@ -50,7 +50,6 @@ sum(tazhh$num_hh_control)
 ```
 
 ## The TAZ-level outputs also are compared to WFRC simulated demographics
-
 ```{r taz_comparison}
 hh_data <- read_csv("output/synthetic_households.csv")
 per_data <- read_csv("output/synthetic_persons.csv")
@@ -126,27 +125,41 @@ diff_table$WRK1 <- comb_work$WRK1.x - comb_work$WRK1.y
 diff_table$WRK2 <- comb_work$WRK2.x - comb_work$WRK2.y
 diff_table$WRK3 <- comb_work$WRK3.x - comb_work$WRK3.y
 
-## Split tables
+## Split data into three tables
 graph_table <- melt(diff_table, id.vars='TAZ', variable.name='category') %>% 
-  mutate(error = value)
+  mutate(Error = value)
 inc_table <- melt(diff_table[1:5], id.vars='TAZ', variable.name='category') %>% 
-  mutate(error = value)
+  mutate(Error = value)
 size_table <- melt(diff_table[c(1, 6:11)], id.vars='TAZ', variable.name='category') %>% 
-  mutate(error = value)
+  mutate(Error = value)
 work_table <- melt(diff_table[c(1, 12:15)], id.vars='TAZ', variable.name='category') %>% 
-  mutate(error = value)
+  mutate(Error = value)
 
 ## Plot all frequency tables
-error_all <- ggplot(graph_table, aes(x = error)) + geom_freqpoly(binwidth = 2) +
+error_all <- ggplot(graph_table, aes(x = Error)) + geom_freqpoly(binwidth = 2) +
   facet_wrap( ~  category, ncol=4) + xlim(-50,50) 
 
 ## Plot for each category
-ggplot(inc_table) +
-  geom_freqpoly(aes(x = error, color = category), binwidth = 2) + xlim(-300,300)
-ggplot(size_table) +
-  geom_freqpoly(aes(x = error, color = category), binwidth = 2) + xlim(-100,100)
-ggplot(work_table) +
-  geom_freqpoly(aes(x = error, color = category), binwidth = 2) + xlim(-150,100)
+plot_inc <- ggplot(inc_table) + geom_freqpoly(aes(x = Error, color = category), binwidth = 2) + 
+  xlim(-150,150) + theme_bw(base_size = 18) + labs(y = 'Frequency', color = 'Income Group')
+plot_size <- ggplot(size_table) + geom_freqpoly(aes(x = Error, color = category), binwidth = 2) + 
+  xlim(-40,40) + theme_bw(base_size = 18) + labs(y = 'Frequency', color = 'Household Size')
+plot_work <- ggplot(work_table) + geom_freqpoly(aes(x = Error, color = category), binwidth = 2) + 
+  xlim(-100,50) + theme_bw(base_size = 18) + 
+  labs(y = 'Frequency', color = str_wrap('Workers in Household', width = 10)) 
+
+## Create error bar graphic
+ebar <- as.data.frame(names(diff_table[2:15]))
+for (i in 2:15){
+  avg <- mean(diff_table[,i])
+  se <- sd(diff_table[,i])/sqrt(length(diff_table[,i]))
+  ebar$avg[i-1] <- avg
+  ebar$se[i-1] <- se
+}
+ebar_plot <- ggplot(ebar, aes(x = avg, y = col_names)) +
+  coord_trans(xlim = c(-35,35)) +
+  geom_point(position = position_dodge(width = .6)) +
+  geom_errorbar(aes(xmin = avg-1.96*se, xmax = avg+1.96*se), width = .1, position = position_dodge(.6))
 
 ## Output to shapefile
 taz_boundaries <- st_read("inputs/taz.geojson") %>% 
@@ -158,7 +171,6 @@ st_write(error_map, "validation/TAZerrormap.shp", driver = "ESRI Shapefile")
 
 ## Person Categories
 Compare the population breakdown to the NHTS data
-
 ```{r cats}
 replace_na <- function(x) {
   ifelse(is.na(x),-8,x)
@@ -207,7 +219,6 @@ people <- people %>%
 summary(people$person_type)
 ```
 
-
 ```{r demo}
 #Nate's demographics code, not updated yet
 total_persons <- read_rds("data/persons.rds") %>%
@@ -228,4 +239,3 @@ total_persons %>%
             auto_sufficient = mean(auto)) %>%
   mutate(dist = percent(count/sum(count), accuracy = 0.1))
 ```
-
