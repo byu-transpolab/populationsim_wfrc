@@ -312,7 +312,7 @@ seed_hh <- pums_hh %>%
     # create unique hh_id field
     hh_id = 1:nrow(.),
     # compute adjusted numeric income
-    HHINCADJ = FINCP * ADJINC
+    HHINCADJ = FINCP * ADJINC/10^6
   ) %>%
   # apply replacement function to key variables
   mutate_at(.vars = vars(NP, WIF, WGTP, HHINCADJ), replace_na)
