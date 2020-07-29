@@ -8,11 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 library(sf)
-library(leaflet)
 library(tidyverse)
-library(tigris)
-library(tidycensus)
-library(memisc)
+library(reshape2)
 options(readr.show_progress = FALSE)
 ```
 
@@ -128,6 +125,28 @@ diff_table$WRK0 <- comb_work$WRK0.x - comb_work$WRK0.y
 diff_table$WRK1 <- comb_work$WRK1.x - comb_work$WRK1.y
 diff_table$WRK2 <- comb_work$WRK2.x - comb_work$WRK2.y
 diff_table$WRK3 <- comb_work$WRK3.x - comb_work$WRK3.y
+
+## Split tables
+graph_table <- melt(diff_table, id.vars='TAZ', variable.name='category') %>% 
+  mutate(error = value)
+inc_table <- melt(diff_table[1:5], id.vars='TAZ', variable.name='category') %>% 
+  mutate(error = value)
+size_table <- melt(diff_table[c(1, 6:11)], id.vars='TAZ', variable.name='category') %>% 
+  mutate(error = value)
+work_table <- melt(diff_table[c(1, 12:15)], id.vars='TAZ', variable.name='category') %>% 
+  mutate(error = value)
+
+## Plot all frequency tables
+error_all <- ggplot(graph_table, aes(x = error)) + geom_freqpoly(binwidth = 2) +
+  facet_wrap( ~  category, ncol=4) + xlim(-50,50) 
+
+## Plot for each category
+ggplot(inc_table) +
+  geom_freqpoly(aes(x = error, color = category), binwidth = 2) + xlim(-300,300)
+ggplot(size_table) +
+  geom_freqpoly(aes(x = error, color = category), binwidth = 2) + xlim(-100,100)
+ggplot(work_table) +
+  geom_freqpoly(aes(x = error, color = category), binwidth = 2) + xlim(-150,100)
 
 ## Output to shapefile
 taz_boundaries <- st_read("inputs/taz.geojson") %>% 
