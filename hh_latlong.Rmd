@@ -38,6 +38,9 @@ tazcent <- read_csv("inputs/tazcentroids.csv") %>%
   arrange(TAZID) %>%
   filter(CO_FIPS > 0) %>%
   mutate(TAZ = as.character(TAZID))
+
+persons <- read_csv("output/synthetic_persons.csv")
+personsf <- read_csv("output/final_persons.csv")
 ```
 
 
@@ -52,7 +55,12 @@ In order to accomplish the task of assigning households address point coordinate
 tothh <- house %>%
   arrange(TAZ) %>% mutate(tot_hh = 1) %>% select(TAZ, tot_hh)%>%
   group_by(TAZ) %>% summarize_all("sum")
-p <- data.frame(TAZ = (1:2881))  
+p <- data.frame(TAZ = (1:2881))
+
+#totp <- persons %>%
+#  arrange(TAZ) %>% select(TAZ,household_id) 
+#left_join(totp, address, by = "TAZ")
+#paged_table(totp)
 
 #display TAZs with no households as the value of 0
 tothh <- left_join(p, tothh, by = "TAZ") 
@@ -93,7 +101,7 @@ house2 <- house %>%
   arrange(TAZ) %>% 
   mutate(TAZ = as.character(TAZ)) %>% group_by(TAZ) %>%
   mutate(Index = 1:n(), index = as.character(Index), tazcom = paste(TAZ, index)) %>%
-  select(tazcom, index, household_id)
+  select(tazcom, index, household_id,PUMA,TRACT,NP,HHINCADJ,WIF)
 
 #organize the address point dataset by numbering each TAZ for each address point using Index
 address2 <- join %>%
@@ -107,13 +115,26 @@ The table below shows the final result of the household coordinates in longitude
 
 ```{r}
 #join the address point and house tables by the indexing of the TAZ, thus assigning coordinates to the households
-hhcoord <- left_join(house2, address2, by = "tazcom") %>% select(TAZ.x, household_id, longitude, latitude)
+hhcoord <- left_join(house2, address2, by = "tazcom") %>% select(TAZ.x, household_id,PUMA,TRACT,NP,HHINCADJ,WIF, longitude, latitude)
   colnames(hhcoord)[1] <- "TAZ"
-  
+
 #display the final table of the household coordinates and create a csv
-paged_table(hhcoord)
-write_csv(hhcoord, "hhcoord.csv")
+#paged_table(hhcoord)
+#write_csv(hhcoord, "hhcoord.csv")
 ```
+
+#### Updating ActivitySim Inputs and Outputs
+The household coordinates table is just the coordinates added to the synthetic households csv from the ActivitySim inputs. We also want to add these coordinates to the other input of the sythetic persons as well as the final persons ActivitySim output. That way, household coordinates are in all the important tables that are needed.
+
+```{r}
+persons <- persons %>%
+  arrange(TAZ) %>%
+  left_join(persons,hhcoord, by = "TAZ") 
+  
+paged_table(persons)
+```
+
+
 
 ### Map Comparison
 Using the WFRC GIS TAZ file, we can display the poloygon of any TAZ we want on a map. Then, we can compare two maps: one with the position of the households before assigning address point coordinates and one after assigning the address point coordinates. 
