@@ -6,3 +6,6 @@ data/seed_persons.csv
 builder_cache/*
 builder_files/*
 output/synthetic_persons.csv
+output/synthetic_households.csv
+output/final_persons.csv
+output/final_households.csv
