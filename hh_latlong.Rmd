@@ -19,16 +19,22 @@ library(kableExtra)
 ### Introduction
 As a result of the synthetic population analysis, a certain number of households exist within each TAZ. Each one of those households were assigned the same position as the centroid of the TAZ in which they reside in. For exampe, if a TAZ were to have 2000 households, all 2000 would be located in the exact same spot. Of course this is unrealistic, and to help reduce further error in future analyses, new geographic coordinates will be assigned to each household id.
 
-
-### Address Points
+### Address Points and Parcel Centroids
 The new coordinates for the households are based on address points within the same TAZ. The address points dataset was found on AGRC (https://gis.utah.gov/data/location/address-data/). The address points were then uploaded into QGIS and their latitude and longitude were determined. A joint analysis was run between the WFRC GIS TAZ file and the points, creating a list of address coordninates at the TAZ level.
 
-The coordinate system (CRS) that was used in the GIS calculation of the latitude and longitude points was WGS 84. Both the TAZ centroids and address points are in the same coordinate system.
+According to the synthetic households, there are 57 TAZs that have household ids that are not shown in the Address Points dataset. Therefore, in these cases, parcel coordinates will be used. 
+
+The parcel dataset was found on AGRC as well
+(https://gis.utah.gov/data/cadastre/parcels/). Then, like the Address Points, a joint analysis was run between the parcel centroid points and the TAZ file.
+
+The coordinate system (CRS) that was used in the GIS calculations of the latitude and longitude points was WGS 84. The TAZ centroids, the address points, and the parcel centroids are in the same coordinate system.
 
 ```{r files}
-#the synthetic population and address datasets are read into the file
+#the synthetic population and address and parcel datasets are read into the file
 #we only read in the residential type addresses
-house <- read_csv("output/synthetic_households.csv") 
+house <- read_csv("output/synthetic_households.csv")
+parcel <- read_csv("inputs/parcel2.csv")
+  colnames(parcel)[1] <- "TAZ"
 address <- read_csv("inputs/AddressCoordinates.csv") %>%
   filter(PtType == "Residential")
   colnames(address)[1] <- "TAZ"
@@ -38,17 +44,13 @@ tazcent <- read_csv("inputs/tazcentroids.csv") %>%
   arrange(TAZID) %>%
   filter(CO_FIPS > 0) %>%
   mutate(TAZ = as.character(TAZID))
-
-persons <- read_csv("output/synthetic_persons.csv")
-personsf <- read_csv("output/final_persons.csv")
 ```
-
 
 ### New Household Coordinates
 Since there is no knowledge of the household location behond the TAZ in which they are located, a random address point within the same TAZ is assigned to each household. If there are more households than address points in the same TAZ, the same address is used amoung the multiple household ids. (This is reasonable in some cases as many homes are built on top of each other, like with appartment buildings.) 
 
-#### Address Points Coordinates
-In order to accomplish the task of assigning households address point coordinates, first the total number of households in each TAZ must be determined.
+#### Assigning Household Coordinates
+In order to accomplish the task of assigning households address point coordinates, first the total number of households in each TAZ must be determined. Also, it is important to know which of the TAZs do have households but don't have address points, so that later on parcel coordinates can be assigned to them.
 
 ```{r}
 #determine the total number of households per TAZ
@@ -57,33 +59,47 @@ tothh <- house %>%
   group_by(TAZ) %>% summarize_all("sum")
 p <- data.frame(TAZ = (1:2881))
 
-#totp <- persons %>%
-#  arrange(TAZ) %>% select(TAZ,household_id) 
-#left_join(totp, address, by = "TAZ")
-#paged_table(totp)
-
 #display TAZs with no households as the value of 0
 tothh <- left_join(p, tothh, by = "TAZ") 
 tothh[is.na(tothh)] <- 0
 
 #display all TAZs, so that the loop in the next step doesn't break
 address <- left_join(p,address, by = "TAZ")
-address[is.na(address)] <- 0
+  address[is.na(address)] <- 0
+parcel <- left_join(p,parcel, by = "TAZ")
+  parcel[is.na(parcel)] <- 0
+
+#create a table that has the third column to the tothh table
+col3 <- address %>%
+  select(TAZ, CO_FIPS)%>%
+  group_by(TAZ) %>% summarize_all("sum") %>%
+  filter(CO_FIPS == 0)
+
+#add the CO_FIPS sum to the tothh table (displays a 0 where no address coordinates exist; allows the loop to get coordinates from parcel dataset instead)
+tothh <- left_join(tothh,col3, by = "TAZ") %>% select(TAZ,tot_hh,CO_FIPS)
+  tothh[is.na(tothh)] <- 1
 ```
 
-Then, by spliting up the address table into separate vectors for each TAZ, and using a loop, a set of coordinates for the right amount of households per TAZ can be determined.The separted vectors with added coordinates are then joined into a table.
+Then, by spliting up the address and parcel tables into separate vectors for each TAZ, and using a loop, a set of coordinates for the right amount of households per TAZ can be determined.The separted vectors with added coordinates are then joined into a table.
 
 ```{r}
 #separate the address point data table into a set of vectors for each TAZ
 address <- address %>% arrange(TAZ) %>% select(TAZ, xcoord, ycoord)
 splitt <- split(address,address$TAZ)
 
+#separate the parcel data table into a set of vectors for each TAZ
+parcel <- parcel %>% arrange(TAZ) %>% select(TAZ, xcoord, ycoord)
+splitt2 <- split(parcel,parcel$TAZ)
+
 #a loop that determines the coordinates for each TAZ based on the number of households per TAZ; use of the sample function; a joint table is continually updated
 i = 1
 while (i <= 2881){
   n = tothh[i,2]
+  m = tothh[i,3]
   testsam <- sample_n(splitt[[i]], n, replace = TRUE)
-  ifelse(i == 1, join <- sample_n(splitt[[1]], n, replace = TRUE),   join <- rbind(join, testsam))
+  testsam2 <- sample_n(splitt2[[i]], n, replace = TRUE)
+  ifelse(i == 1, join <- sample_n(splitt[[1]], n, replace = TRUE), 
+         ifelse(n != 0 & m == 0,join <- rbind(join, testsam2), join <- rbind(join,           testsam)))
   i = i + 1
 }
 colnames(join)[2] <- "longitude"
@@ -111,30 +127,23 @@ address2 <- join %>%
 ```
 
 #### Household Coordinates Table
-The table below shows the final result of the household coordinates in longitude and latitude. It is a joint table of the updated address point coordinates and the house data table.
+The table below shows the final result of the household coordinates in longitude and latitude. It is a joint table of the updated address point coordinates and the house data table.The synthetic housholds csv is also updated to include x and y coordinates.
 
 ```{r}
 #join the address point and house tables by the indexing of the TAZ, thus assigning coordinates to the households
-hhcoord <- left_join(house2, address2, by = "tazcom") %>% select(TAZ.x, household_id,PUMA,TRACT,NP,HHINCADJ,WIF, longitude, latitude)
-  colnames(hhcoord)[1] <- "TAZ"
-
-#display the final table of the household coordinates and create a csv
-#paged_table(hhcoord)
-#write_csv(hhcoord, "hhcoord.csv")
-```
-
-#### Updating ActivitySim Inputs and Outputs
-The household coordinates table is just the coordinates added to the synthetic households csv from the ActivitySim inputs. We also want to add these coordinates to the other input of the sythetic persons as well as the final persons ActivitySim output. That way, household coordinates are in all the important tables that are needed.
-
-```{r}
-persons <- persons %>%
-  arrange(TAZ) %>%
-  left_join(persons,hhcoord, by = "TAZ") 
+hhcoord <- left_join(house2, address2, by = "tazcom") %>% select(household_id,PUMA,TRACT,TAZ.x,NP,HHINCADJ,WIF, longitude, latitude) %>%
+  arrange(household_id)
+  colnames(hhcoord)[4] <- "TAZ"
   
-paged_table(persons)
+#the coordinate table
+hhcoord2 <- hhcoord %>%
+  select(household_id,TAZ,longitude,latitude)
+
+#display the final table of the household coordinates and create/update the csvs
+paged_table(hhcoord2)
+write_csv(hhcoord2, "hhcoord.csv")
+write_csv(hhcoord, "output/synthetic_households_xy.csv")
 ```
-
-
 
 ### Map Comparison
 Using the WFRC GIS TAZ file, we can display the poloygon of any TAZ we want on a map. Then, we can compare two maps: one with the position of the households before assigning address point coordinates and one after assigning the address point coordinates. 
