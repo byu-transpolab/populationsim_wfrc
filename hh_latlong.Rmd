@@ -32,7 +32,7 @@ The coordinate system (CRS) that was used in the GIS calculations of the latitud
 ```{r files}
 #the synthetic population and address and parcel datasets are read into the file
 #we only read in the residential type addresses
-house <- read_csv("output/synthetic_households.csv")
+house <- read_csv("output/synthetic_households2.csv")
 parcel <- read_csv("inputs/parcel2.csv")
   colnames(parcel)[1] <- "TAZ"
 address <- read_csv("inputs/AddressCoordinates.csv") %>%
@@ -44,6 +44,25 @@ tazcent <- read_csv("inputs/tazcentroids.csv") %>%
   arrange(TAZID) %>%
   filter(CO_FIPS > 0) %>%
   mutate(TAZ = as.character(TAZID))
+```
+
+The parcel dataset also isn't complete, and some TAZs do not have coordinates. In these rare cases (about 10), the TAZ centroid is used for the household coordinate. We will update the parcel table to include this minor addition.
+
+```{r}
+#read in the taz inputs because I don't want to change the one from above
+taz <- read_csv("inputs/tazcentroids.csv") %>%
+  arrange(TAZID) %>%
+  filter(CO_FIPS > 0) %>%
+  mutate(TAZ = TAZID)
+
+#update the parcel dataset to fill in any TAZs that don't have coordinate information
+parcel <- left_join(parcel,taz,by = "TAZ") %>%
+  mutate(
+    xcoord = ifelse(is.na(xcoord.x), xcoord.y, xcoord.x),
+    ycoord = ifelse(is.na(ycoord.x), ycoord.y, ycoord.x),
+    CO_FIPS = CO_FIPS.x
+  ) %>%
+  select(TAZ,CO_FIPS,PARCEL_ID,OWN_TYPE,xcoord,ycoord)
 ```
 
 ### New Household Coordinates
@@ -117,7 +136,7 @@ house2 <- house %>%
   arrange(TAZ) %>% 
   mutate(TAZ = as.character(TAZ)) %>% group_by(TAZ) %>%
   mutate(Index = 1:n(), index = as.character(Index), tazcom = paste(TAZ, index)) %>%
-  select(tazcom, index, household_id,PUMA,TRACT,NP,HHINCADJ,WIF)
+  select(tazcom, index, household_id,PUMA,TRACT,hhsize,HHINCADJ,num_workers,HHT,VEHICL,income,digits,TAZ)
 
 #organize the address point dataset by numbering each TAZ for each address point using Index
 address2 <- join %>%
@@ -131,9 +150,9 @@ The table below shows the final result of the household coordinates in longitude
 
 ```{r}
 #join the address point and house tables by the indexing of the TAZ, thus assigning coordinates to the households
-hhcoord <- left_join(house2, address2, by = "tazcom") %>% select(household_id,PUMA,TRACT,TAZ.x,NP,HHINCADJ,WIF, longitude, latitude) %>%
+hhcoord <- left_join(house2, address2, by = "tazcom") %>% select(household_id,TAZ.x,PUMA,TRACT,hhsize,HHINCADJ,num_workers,HHT,VEHICL,income,digits,longitude,latitude) %>%
   arrange(household_id)
-  colnames(hhcoord)[4] <- "TAZ"
+colnames(hhcoord)[2] <- "TAZ"
   
 #the coordinate table
 hhcoord2 <- hhcoord %>%
